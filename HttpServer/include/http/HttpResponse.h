@@ -52,8 +52,6 @@ public:
         // body_ += "\0";
     }
 
-    // void setJsonBody();
-
     void setStatusLine(const std::string& version,
                          HttpStatusCode statusCode,
                          const std::string& statusMessage);

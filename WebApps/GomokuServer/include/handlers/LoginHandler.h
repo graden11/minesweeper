@@ -11,10 +11,10 @@ public:
     
     void handle(const HttpRequest& req, HttpResponse* resp) override;
 
-    void recycleUser(int userId)
-    {
-        server_->isLogining_.erase(userId);
-    }
+    // void recycleUser(int userId)
+    // {
+    //     server_->isLogining_.erase(userId);
+    // }
 private:
     int queryUserId(const std::string& username, const std::string& password);
 

@@ -1,5 +1,8 @@
 #include "AiGame.h"
 
+#include <chrono>
+#include <thread>
+
 
 AiGame::AiGame(int userId)
     : gameOver_(false)
@@ -33,6 +36,7 @@ bool AiGame::humanMove(int x, int y)
 void AiGame::aiMove() {
     if (gameOver_ || isDraw()) return;
     
+    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // 添加500毫秒延时
     int x, y;
     // 获取AI的最佳移动位置
     std::tie(x, y) = getBestMove();

@@ -2,22 +2,29 @@
 
 void MenuHandler::handle(const HttpRequest &req, HttpResponse *resp)
 {
-    auto contentType = req.getHeader("Content-Type");
-    if (contentType.empty() || contentType != "application/json" || req.getBody().empty())
-    {
-        resp->setStatusLine(req.getVersion(), HttpResponse::k400BadRequest, "Bad Request");
-        resp->setCloseConnection(true);
-        resp->setContentType("application/json");
-        resp->setContentLength(0);
-        resp->setBody("");
-        return;
-    }
-
     // JSON 解析使用 try catch 捕获异常
     try
     {
-        json requestBody = json::parse(req.getBody());
-        int userId = std::stoi(requestBody["userId"].get<std::string>());
+        // 检查用户是否已登录
+        auto session = server_->getSessionManager()->getSession(req, resp);
+        std::cout << "session->getValue(\"isLoggedIn\") = " << session->getValue("isLoggedIn") << std::endl;
+        if (session->getValue("isLoggedIn") != "true")
+        {
+            // 用户未登录，返回未授权错误
+            json errorResp;
+            errorResp["status"] = "error";
+            errorResp["message"] = "Unauthorized";
+            std::string errorBody = errorResp.dump(4);
+
+            server_->packageResp(req.getVersion(), HttpResponse::k401Unauthorized,
+                                "Unauthorized", true, "application/json", errorBody.size(),
+                                 errorBody, resp);
+            return;
+        }
+
+        // 获取用户信息
+        int userId = std::stoi(session->getValue("userId"));
+        std::string username = session->getValue("username");
 
         std::string reqFile("../WebApps/GomokuServer/resource/menu.html");
         FileUtil fileOperater(reqFile);
@@ -26,6 +33,8 @@ void MenuHandler::handle(const HttpRequest &req, HttpResponse *resp)
             LOG_WARN << reqFile << "not exist.";
             fileOperater.resetDefaultFile();
         }
+
+        std::cout << "输出文件成功" << std::endl;
 
         std::vector<char> buffer(fileOperater.size());
         fileOperater.readFile(buffer); // 读出文件数据

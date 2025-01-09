@@ -3,6 +3,7 @@
 using namespace muduo;
 using namespace muduo::net;
 
+// 将报文解析出来将关键信息封装到HttpRequest对象里面去
 bool HttpContext::parseRequest(Buffer *buf, Timestamp receiveTime)
 {
     bool ok = true; // 解析每行请求格式是否正确
@@ -42,20 +43,38 @@ bool HttpContext::parseRequest(Buffer *buf, Timestamp receiveTime)
                     request_.addHeader(buf->peek(), colon, crlf);
                 }
                 else if (buf->peek() == crlf)
-                { // 空行，结束Header
-                    if (!request_.getHeader("Content-Length").empty())
+                { 
+                    // 空行，结束Header
+                    // 根据请求方法和Content-Length判断是否需要继续读取body
+                    if (request_.method() == HttpRequest::kPost || 
+                        request_.method() == HttpRequest::kPut)
                     {
-                        request_.setContentLength(std::stoi(request_.getHeader("Content-Length")));
+                        std::string contentLength = request_.getHeader("Content-Length");
+                        if (!contentLength.empty())
+                        {
+                            request_.setContentLength(std::stoi(contentLength));
+                            if (request_.contentLength() > 0)
+                            {
+                                state_ = kExpectBody;
+                            }
+                            else
+                            {
+                                state_ = kGotAll;
+                                hasMore = false;
+                            }
+                        }
+                        else
+                        {
+                            // POST/PUT 请求没有 Content-Length，是HTTP语法错误
+                            ok = false;
+                            hasMore = false;
+                        }
                     }
-
-                    if (request_.contentLength() == 0)
+                    else
                     {
-                        state_ = kGotAll;
+                        // GET/HEAD/DELETE 等方法直接完成（没有请求体）
+                        state_ = kGotAll; 
                         hasMore = false;
-                    }
-                    else // 有请求体
-                    {
-                        state_ = kExpectBody;
                     }
                 }
                 else
@@ -72,7 +91,7 @@ bool HttpContext::parseRequest(Buffer *buf, Timestamp receiveTime)
         }
         else if (state_ == kExpectBody)
         {
-            // 检查缓冲区中是否有足够的数据，
+            // 检查缓冲区中是否有足够的数据
             if (buf->readableBytes() < request_.contentLength())
             {
                 hasMore = false; // 数据不完整，等待更多数据
@@ -90,10 +109,10 @@ bool HttpContext::parseRequest(Buffer *buf, Timestamp receiveTime)
             hasMore = false;
         }
     }
-    return ok;
+    return ok; // ok为false代表报文语法解析错误
 }
 
-// 将报文解析出来将关键信息封装到HttpRequest对象里面去
+// 解析请求行
 bool HttpContext::processRequestLine(const char *begin, const char *end)
 {
     bool succeed = false;
@@ -109,7 +128,7 @@ bool HttpContext::processRequestLine(const char *begin, const char *end)
             if (argumentStart != space) // 请求带参数
             {
                 request_.setPath(start, argumentStart); // 注意这些返回值边界
-                request_.setArgument(argumentStart + 1, space);
+                request_.setQueryParameters(argumentStart + 1, space);
             }
             else // 请求不带参数
             {

@@ -40,6 +40,17 @@ public:
     void setThreadNum(int numThreads);
     void start();
 private:
+    void initialize();
+    void setSessionManager(std::unique_ptr<SessionManager> manager)
+    {
+        httpServer_.setSessionManager(std::move(manager));
+    }
+
+    SessionManager*  getSessionManager() const
+    {
+        return httpServer_.getSessionManager();
+    }
+    
     void initializeRouter();
     
     void restartChessGameVsAi(const HttpRequest& req, HttpResponse* resp);
@@ -59,7 +70,7 @@ private:
         return maxOnline_;
     }
 
-    // 获取当前在线人数
+    // 获取当前在线人数，fixme: 从会话数量获取
     int getCurOnline() const
     {
         return isLogining_.size();

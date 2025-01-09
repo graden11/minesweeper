@@ -24,11 +24,21 @@ void LoginHandler::handle(const HttpRequest &req, HttpResponse *resp)
         std::string username = parsed["username"];
         std::string password = parsed["password"];
 
-        std::cout << "解析成功打印一下：username: " << username << " password: " << password << std::endl;
+        // 验证用户是否存在
         int userId = queryUserId(username, password);
         if (userId != -1)
         {
-            // 判断当前用户是否在登录中
+            // 获取会话
+            auto session = server_->getSessionManager()->getSession(req, resp);
+            // 会话都不是同一个会话，因为会话判断是不是同一个会话是通过请求报文中的cookie来判断的
+            // 所以不同页面的访问是不可能是相同的会话的，只有该页面前面访问过服务端，才会有会话记录
+            // 那么判断用户是否在其他地方登录中不能通过会话来判断
+            
+            // 在会话中存储用户信息
+            session->setValue("userId", std::to_string(userId));
+            session->setValue("username", username);
+            session->setValue("isLoggedIn", "true");
+            std::cout << "session->getValue(\"isLoggedIn\") = " << session->getValue("isLoggedIn") << std::endl;
             if (server_->isLogining_.find(userId) == server_->isLogining_.end() || server_->isLogining_[userId] == false)
             {
                 server_->isLogining_[userId] = true;

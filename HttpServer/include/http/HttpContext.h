@@ -11,10 +11,10 @@ class HttpContext
 public:
     enum HttpRequestParseState
     {
-        kExpectRequestLine,
-        kExpectHeaders,
-        kExpectBody,
-        kGotAll,
+        kExpectRequestLine, // 解析请求行
+        kExpectHeaders, // 解析请求头
+        kExpectBody, // 解析请求体
+        kGotAll, // 解析完成
     };
     
     HttpContext()
@@ -22,7 +22,7 @@ public:
     {}
 
     bool parseRequest(muduo::net::Buffer* buf, muduo::Timestamp receiveTime);
-    bool gotAll() const { return state_ == kGotAll; }
+    bool gotAll() const { return state_ == kGotAll;  }
 
     void reset()
     {

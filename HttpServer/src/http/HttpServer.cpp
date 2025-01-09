@@ -15,14 +15,7 @@ HttpServer::HttpServer(int port,
                        muduo::net::TcpServer::Option option)
     : listenAddr_(port), server_(&mainLoop_, listenAddr_, name, option), httpCallback_(std::bind(&HttpServer::onHttpCallback, this, std::placeholders::_1, std::placeholders::_2))
 {
-    // 设置回调函数
-    server_.setConnectionCallback(
-        std::bind(&HttpServer::onConnection, this, std::placeholders::_1));
-    server_.setMessageCallback(
-        std::bind(&HttpServer::onMessage, this,
-                  std::placeholders::_1,
-                  std::placeholders::_2,
-                  std::placeholders::_3));
+    initialize();
 }
 
 // 服务器运行函数
@@ -31,6 +24,18 @@ void HttpServer::start()
     LOG_WARN << "HttpServer[" << server_.name() << "] starts listening on" << server_.ipPort();
     server_.start();
     mainLoop_.loop();
+}
+
+void HttpServer::initialize()
+{
+    // 设置回调函数
+    server_.setConnectionCallback(
+        std::bind(&HttpServer::onConnection, this, std::placeholders::_1));
+    server_.setMessageCallback(
+        std::bind(&HttpServer::onMessage, this,
+                  std::placeholders::_1,
+                  std::placeholders::_2,
+                  std::placeholders::_3));
 }
 
 void HttpServer::onConnection(const muduo::net::TcpConnectionPtr &conn)
@@ -57,8 +62,6 @@ void HttpServer::onMessage(const muduo::net::TcpConnectionPtr &conn,
             conn->shutdown();
         }
 
-        // 用户登录成功时绑定tcpConnection和
-
         // 如果buf缓冲区中解析出一个完整的数据包才封装响应报文
         if (context->gotAll())
         {
@@ -81,7 +84,6 @@ void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpR
     bool close = ((connection == "close") ||
                   (req.getVersion() == "HTTP/1.0" && connection != "Keep-Alive"));
     HttpResponse response(close);
-    
     // 处理OPTIONS请求
     if (req.method() == HttpRequest::kOptions)
     {
@@ -97,9 +99,8 @@ void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpR
         return;
     }
 
-
     // 根据请求报文信息来封装响应报文对象
-    httpCallback_(req, &response);
+    httpCallback_(req, &response); // 执行onHttpCallback函数
 
     // 可以给response设置一个成员，判断是否请求的是文件，如果是文件设置为true，并且存在文件位置在这里send出去。
     muduo::net::Buffer buf;
@@ -114,6 +115,7 @@ void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpR
     }
 }
 
+// 执行请求对应的路由处理函数
 void HttpServer::onHttpCallback(const HttpRequest &req, HttpResponse *resp)
 {
     if (!router_.route(req, resp))

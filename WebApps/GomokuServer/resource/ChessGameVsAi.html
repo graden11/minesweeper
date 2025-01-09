@@ -115,6 +115,20 @@
         .control-btn.return:hover {
             background-color: #da190b;
         }
+
+        .loader {
+            border: 8px solid #f3f3f3; /* Light grey */
+            border-top: 8px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 40px; /* Size of the loader */
+            height: 40px; /* Size of the loader */
+            animation: spin 1s linear infinite; /* Animation */
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 
@@ -136,6 +150,20 @@
 
     <!-- 胜负提示 -->
     <div id="result"></div>
+
+    <!-- 在 HTML 中添加一个用于显示获胜方的元素 -->
+    <div id="winner-display" style="font-size: 24px; color: red; display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(255, 255, 255, 0.8); padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);">
+        恭喜你，获胜了！
+    </div>
+
+    <!-- 在 HTML 中添加一个用于显示思考提示的元素 -->
+    <div id="thinking-message" style="font-size: 20px; color: blue; display: none; position: absolute; top: 45%; left: 50%; transform: translateX(-50%);">
+        AI正在思考中，请等待...
+    </div>
+
+    <div id="loading-animation" style="display: none; position: absolute; top: 50%; left: 50%; transform: translateX(-50%);">
+        <div class="loader"></div>
+    </div>
 
     <script>
         // 将所有变量声明在一个对象中管理
@@ -160,141 +188,162 @@
 
         // 初始化函数
         function initializeGame() {
-            gameState.boardElement = document.getElementById('board');
-            gameState.resultElement = document.getElementById('result');
-            gameState.reset(); // 使用重置函数初始化状态
-            
-            createBoard();
-            addEventListeners();
+            gameState.boardState = Array(15).fill().map(() => Array(15).fill("empty")); // 初始化棋盘状态
+            gameState.currentPlayer = 'black'; // 设置当前玩家
+            gameState.isGameActive = true; // 设置游戏状态为活动
+            createBoard(); // 创建棋盘
+            addEventListeners(); // 添加事件监听
         }
 
         // 创建棋盘
         function createBoard() {
-            if (!gameState.boardElement) return;
-            
-            gameState.boardElement.innerHTML = '';
-            for (let i = 0; i < gameState.boardSize; i++) {
-                for (let j = 0; j < gameState.boardSize; j++) {
+            const boardElement = document.getElementById('board');
+            boardElement.innerHTML = ''; // 清空棋盘
+
+            for (let i = 0; i < 15; i++) {
+                for (let j = 0; j < 15; j++) {
                     const cell = document.createElement('div');
                     cell.className = 'cell';
                     cell.dataset.row = i;
                     cell.dataset.col = j;
-                    gameState.boardElement.appendChild(cell);
+                    boardElement.appendChild(cell);
                 }
             }
         }
 
-        // 添加事件监听
-        function addEventListeners() {
-            if (!gameState.boardElement) return;
-            
-            // 添加棋盘点击事件
-            gameState.boardElement.addEventListener('click', handleMove);
-            
-            // 添加重新开始按钮点击事件
-            const restartButton = document.querySelector('.control-btn');
-            if (restartButton) {
-                restartButton.addEventListener('click', restartGame);
+        // 添加判断落子是否合法的函数
+        function isValidMove(x, y) {
+            // 检查是否在棋盘范围内
+            if (x < 0 || x >= 15 || y < 0 || y >= 15) {
+                return false;
             }
-            
-            // 添加返回菜单按钮点击事件
-            const returnButton = document.querySelector('.control-btn.return');
-            if (returnButton) {
-                returnButton.addEventListener('click', returnToMenu);
+            // 检查该位置是否已经有棋子
+            if (gameState.boardState[x][y] !== "empty") {
+                return false;
             }
+            return true;
         }
 
-        // 处理落子
-        function handleMove(event) {
-            if (!gameState.isGameActive || !event.target.classList.contains('cell')) return;
-            
-            const row = parseInt(event.target.dataset.row);
-            const col = parseInt(event.target.dataset.col);
-            
-            // 检查是否已经有棋子
-            if (gameState.boardState[row][col] !== "empty") return;
-            
+        let isGameOver = false; // 游戏结束标志
+        let isThinking = false; // AI 思考状态标志
+
+        // 修改处理点击的函数
+        function handleCellClick(event) {
+            if (isGameOver || !gameState.isGameActive || isThinking || !event.target.classList.contains('cell')) return;
+
+            const cell = event.target;
+            const x = parseInt(cell.dataset.row);
+            const y = parseInt(cell.dataset.col);
+
+            // 前端先判断是否合法
+            if (!isValidMove(x, y)) {
+                alert('此位置不能落子！');
+                return;
+            }
+
+            // 立即在前端显示棋子
+            cell.classList.add('black'); // 添加黑色棋子类
+            gameState.boardState[x][y] = 'black'; // 更新游戏状态
+            gameState.currentPlayer = 'white'; // 切换到下一个玩家
+
+            // 显示思考提示
+            showThinkingMessage();
+
+            // 发送请求到服务器
+            isThinking = true; // 设置思考状态
             fetch('/aiBot/move', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: userId,
-                    x: row,
-                    y: col
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === "ok") {
-                    gameState.boardState = data.board;
-                    updateBoard();
-                    
-                    if (data.winner !== "none") {
-                        gameState.isGameActive = false;
-                        gameState.resultElement.textContent = 
-                            data.winner === "human" ? "你赢了！" : 
-                            data.winner === "ai" ? "AI获胜！" : "平局！";
-                    }
-                }
-            })
-            .catch(handleError);
-        }
-
-        // 更新棋盘显示
-        function updateBoard() {
-            const cells = gameState.boardElement.getElementsByClassName('cell');
-            for (let i = 0; i < gameState.boardSize; i++) {
-                for (let j = 0; j < gameState.boardSize; j++) {
-                    const cell = cells[i * gameState.boardSize + j];
-                    const pieceType = gameState.boardState[i][j];
-                    
-                    // 保留cell类，只添加或移除棋子类
-                    cell.classList.remove('black', 'white');
-                    if (pieceType !== "empty") {
-                        cell.classList.add(pieceType);
-                    }
-                }
-            }
-        }
-
-        // 添加重新开始函数
-        function restartGame() {
-            const userId = sessionStorage.getItem('userId');
-            
-            fetch('/aiBot/restart', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ userId: userId })
+                body: JSON.stringify({ x, y })
             })
             .then(response => response.json())
             .then(data => {
-                if (data.status === "ok") {
-                    // 重置游戏状态
-                    gameState.reset();
-                    
-                    // 重新启用棋盘点击
-                    gameState.boardElement.style.pointerEvents = "auto";
-                    
-                    // 更新棋盘显示
-                    updateBoard();
-                    
-                    console.log("游戏已重新开始");
-                } else {
-                    throw new Error(data.message || "重新开始��败");
+                isThinking = false; // 重置思考状态
+                hideThinkingMessage(); // 隐藏思考提示
+
+                // 处理游戏结果
+                if (data.winner !== 'none') {
+                    isGameOver = true; // 设置游戏结束标志
+                    hideThinkingMessage(); // 隐藏思考提示
+                    alert(data.winner === 'human' ? '恭喜你，获胜了！' : 'AI获胜！');
+                    displayWinner(data.winner); // 显示获胜方
+                    disableBoard(); // 禁用棋盘
+                    return; // 确保在胜利时直接返回，不执行后续逻辑
                 }
+
+                if (data.status === 'error') {
+                    // 如果服务器返回错误，回滚前端的改动
+                    alert(data.message);
+                    return;
+                }
+
+                // 显示 AI 的落子
+                const aiMove = data.last_move;
+                const aiCell = document.querySelector(
+                    `[data-row="${aiMove.x}"][data-col="${aiMove.y}"]`
+                );
+                aiCell.classList.add('white'); // 添加白色棋子类
+                gameState.boardState[aiMove.x][aiMove.y] = 'white'; // 更新游戏状态
+                gameState.currentPlayer = 'black'; // 切换回人类玩家
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('重新开始失败，请重试！');
+                // 发生错误时回滚前端的改动
+                cell.classList.remove('black'); // 移除黑色棋子类
+                gameState.boardState[x][y] = 'empty'; // 恢复游戏状态
+                gameState.currentPlayer = 'black'; // 恢复当前玩家
+                alert('操作失败，请重试！');
+                isThinking = false; // 重置思考状态
+                hideThinkingMessage(); // 隐藏思考提示
+            });
+        }
+
+        // 显示获胜方
+        function displayWinner(winner) {
+            const winnerDisplay = document.getElementById('winner-display');
+            winnerDisplay.textContent = winner === 'human' ? '恭喜你，获胜了！' : 'AI获胜！';
+            winnerDisplay.style.display = 'block'; // 显示获胜信息
+        }
+
+        // 禁用棋盘
+        function disableBoard() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                cell.removeEventListener('click', handleCellClick); // 移除点击事件
+            });
+        }
+
+        // 重新开始游戏
+        function restartGame() {
+            isGameOver = false; // 重置游戏结束标志
+            isThinking = false; // 重置 AI 思考状态标志
+            gameState.boardState = Array(15).fill().map(() => Array(15).fill("empty")); // 重新初始化棋盘状态
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                cell.classList.remove('black', 'white'); // 移除所有棋子类
+                cell.addEventListener('click', handleCellClick); // 重新添加点击事件
+            });
+            document.getElementById('winner-display').style.display = 'none'; // 隐藏获胜信息
+            document.getElementById('thinking-message').style.display = 'none'; // 隐藏思考提示
+            document.getElementById('loading-animation').style.display = 'none'; // 隐藏加载动画
+            gameState.currentPlayer = 'black'; // 重置当前玩家
+            gameState.isGameActive = true; // 重置游戏状态
+        }
+
+        // 添加事件监听
+        function addEventListeners() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                cell.addEventListener('click', handleCellClick);
             });
         }
 
         // 添加返回菜单函数
         function returnToMenu() {
-            const userId = sessionStorage.getItem('userId');
-            
+            isGameOver = false; // 重置游戏结束标志
+            isThinking = false; // 重置 AI 思考状态标志
             // 显示加载状态
             document.body.innerHTML = `
                 <div id="loading-container">
@@ -310,11 +359,10 @@
             gameState.reset();
             
             fetch('/menu', {
-                method: 'POST',
+                method: 'GET',
                 headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ userId: userId })
+                    'Accept': 'text/html'
+                }
             })
             .then(response => {
                 if (!response.ok) {
@@ -404,7 +452,9 @@
 
         // 确保在 DOM 加载完成后初始化
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeGame);
+            document.addEventListener('DOMContentLoaded', function() {
+                initializeGame();
+            });
         } else {
             initializeGame();
         }
@@ -433,6 +483,22 @@
                 window.location.href = '/entry';
             }
         });
+
+        // 显示思考提示和加载动画
+        function showThinkingMessage() {
+            const thinkingMessage = document.getElementById('thinking-message');
+            const loadingAnimation = document.getElementById('loading-animation');
+            thinkingMessage.style.display = 'block'; // 显示提示
+            loadingAnimation.style.display = 'block'; // 显示加载动画
+        }
+
+        // 隐藏思考提示和加载动画
+        function hideThinkingMessage() {
+            const thinkingMessage = document.getElementById('thinking-message');
+            const loadingAnimation = document.getElementById('loading-animation');
+            thinkingMessage.style.display = 'none'; // 隐藏提示
+            loadingAnimation.style.display = 'none'; // 隐藏加载动画
+        }
     </script>
 </body>
 

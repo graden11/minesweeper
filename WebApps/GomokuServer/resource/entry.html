@@ -222,8 +222,8 @@
                     if (data && data.userId) {
                         sessionStorage.setItem('userId', data.userId);
                         showAlert('登录成功！');
-                        console.log('登录成功，正在加载菜单...'); // 添加调试日志
-                        return loadMenu(data.userId);
+                        // 使用重定向而不是fetch
+                        window.location.href = '/menu';
                     } else {
                         throw new Error('无效的响应数据');
                     }
@@ -236,30 +236,6 @@
                     }
                 });
         });
-
-        // 封装菜单加载函数
-        function loadMenu(userId) {
-            return fetch('/menu', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    userId: userId.toString()
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('菜单加载失败');
-                }
-                return response.text();
-            })
-            .then(html => {
-                document.open();
-                document.write(html);
-                document.close();
-            });
-        }
 
         // 注册表单提交
         document.getElementById('register-form').addEventListener('submit', function (e) {

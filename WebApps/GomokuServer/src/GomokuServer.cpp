@@ -16,7 +16,7 @@ GomokuServer::GomokuServer(int port,
     : httpServer_(port, name, option)
     , maxOnline_(0)
 {
-    initializeRouter();
+    initialize();
 }
 
 void GomokuServer::setThreadNum(int numThreads)
@@ -27,6 +27,18 @@ void GomokuServer::setThreadNum(int numThreads)
 void GomokuServer::start()
 {
     httpServer_.start();
+}
+
+void GomokuServer::initialize()
+{
+    // 创建会话存储
+    auto sessionStorage = std::make_unique<MemorySessionStorage>();
+    // 创建会话管理器
+    auto sessionManager = std::make_unique<SessionManager>(std::move(sessionStorage));
+    // 设置会话管理器
+    setSessionManager(std::move(sessionManager));
+    // 初始化路由
+    initializeRouter();
 }
 
 void GomokuServer::initializeRouter()
@@ -42,30 +54,39 @@ void GomokuServer::initializeRouter()
     // 登出
     httpServer_.Post("/user/logout", std::make_shared<LogoutHandler>(this));
     // 菜单页面
-    httpServer_.Post("/menu", std::make_shared<MenuHandler>(this));
+    httpServer_.Get("/menu", std::make_shared<MenuHandler>(this));
     // 开始对战ai
-    httpServer_.Post("/aiBot/start", std::make_shared<AiGameStartHandler>(this));
+    httpServer_.Get("/aiBot/start", std::make_shared<AiGameStartHandler>(this));
     // 下棋
     httpServer_.Post("/aiBot/move", std::make_shared<AiGameMoveHandler>(this));
     // 重新开始对战ai
-    httpServer_.Post("/aiBot/restart", std::bind(&GomokuServer::restartChessGameVsAi, this, std::placeholders::_1, std::placeholders::_2));
+    httpServer_.Get("/aiBot/restart", std::bind(&GomokuServer::restartChessGameVsAi, this, std::placeholders::_1, std::placeholders::_2));
     // 后台界面
     httpServer_.Get("/backend", std::make_shared<GameBackendHandler>(this));
     // 后台数据获取
     httpServer_.Get("/backend_data", std::bind(&GomokuServer::getBackendData, this, std::placeholders::_1, std::placeholders::_2));
     
-    // 注册回调函数
-    // router_.registerCallback("/logout", 
-    //     [this](const HttpRequest& req, HttpResponse& resp) {
-    //         // 处理登出逻辑
-    //     });
 }
 
 void GomokuServer::restartChessGameVsAi(const HttpRequest& req, HttpResponse* resp)
 {
     // 解析请求体
-    json request = json::parse(req.getBody());
-    int userId = std::stoi(request["userId"].get<std::string>());
+    auto session = getSessionManager()->getSession(req, resp);
+    if (session->getValue("isLoggedIn") != "true")
+    {
+        // 用户未登录，返回未授权错误
+        json errorResp;
+        errorResp["status"] = "error";
+        errorResp["message"] = "Unauthorized";
+        std::string errorBody = errorResp.dump(4);
+
+        packageResp(req.getVersion(), HttpResponse::k401Unauthorized,
+                     "Unauthorized", true, "application/json", errorBody.size(),
+                     errorBody, resp);
+        return;
+    }
+
+    int userId = std::stoi(session->getValue("userId"));
 
     if (aiGames_.find(userId) != aiGames_.end())
         aiGames_.erase(userId);

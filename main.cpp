@@ -29,6 +29,7 @@ int main(int argc, char* argv[])
         break;
     }
   }
+  std::cout << "port: " << port << std::endl;
   
   //WebServer server(listenAddr, serverName);
   GomokuServer server(port, serverName);
