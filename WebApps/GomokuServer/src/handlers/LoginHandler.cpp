@@ -1,15 +1,14 @@
 #include "../include/handlers/LoginHandler.h"
 
-void LoginHandler::handle(const HttpRequest &req, HttpResponse *resp)
+void LoginHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp)
 {
     // 处理登录逻辑
-    // 解析body(json格式)
     // 验证 contentType
     auto contentType = req.getHeader("Content-Type");
     if (contentType.empty() || contentType != "application/json" || req.getBody().empty())
     {
         LOG_INFO << "content" << req.getBody();
-        resp->setStatusLine(req.getVersion(), HttpResponse::k400BadRequest, "Bad Request");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
         resp->setCloseConnection(true);
         resp->setContentType("application/json");
         resp->setContentLength(0);
@@ -53,7 +52,7 @@ void LoginHandler::handle(const HttpRequest &req, HttpResponse *resp)
                 successResp["userId"] = userId;
                 std::string successBody = successResp.dump(4);
 
-                resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+                resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
                 resp->setCloseConnection(false);
                 resp->setContentType("application/json");
                 resp->setContentLength(successBody.size());
@@ -69,7 +68,7 @@ void LoginHandler::handle(const HttpRequest &req, HttpResponse *resp)
                 failureResp["error"] = "账号已在其他地方登录";
                 std::string failureBody = failureResp.dump(4);
 
-                resp->setStatusLine(req.getVersion(), HttpResponse::k403Forbidden, "Forbidden");
+                resp->setStatusLine(req.getVersion(), http::HttpResponse::k403Forbidden, "Forbidden");
                 resp->setCloseConnection(true);
                 resp->setContentType("application/json");
                 resp->setContentLength(failureBody.size());
@@ -85,7 +84,7 @@ void LoginHandler::handle(const HttpRequest &req, HttpResponse *resp)
             failureResp["message"] = "Invalid username or password";
             std::string failureBody = failureResp.dump(4);
 
-            resp->setStatusLine(req.getVersion(), HttpResponse::k401Unauthorized, "Unauthorized");
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k401Unauthorized, "Unauthorized");
             resp->setCloseConnection(false);
             resp->setContentType("application/json");
             resp->setContentLength(failureBody.size());
@@ -101,7 +100,7 @@ void LoginHandler::handle(const HttpRequest &req, HttpResponse *resp)
         failureResp["message"] = e.what();
         std::string failureBody = failureResp.dump(4);
 
-        resp->setStatusLine(req.getVersion(), HttpResponse::k400BadRequest, "Bad Request");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
         resp->setCloseConnection(true);
         resp->setContentType("application/json");
         resp->setContentLength(failureBody.size());
@@ -115,8 +114,8 @@ int LoginHandler::queryUserId(const std::string &username, const std::string &pa
     // 前端用户传来账号密码，查找数据库是否有该账号密码
     // 使用预处理语句, 防止sql注入
     std::string sql = "SELECT id FROM users WHERE username = ? AND password = ?";
-    std::vector<std::string> params = {username, password};
-    std::shared_ptr<sql::ResultSet> res = mysqlUtil_.queryWithParams(sql, params);
+    // std::vector<std::string> params = {username, password};
+    sql::ResultSet* res = mysqlUtil_.executeQuery(sql, username, password);
     if (res->next())
     {
         int id = res->getInt("id");
@@ -124,15 +123,5 @@ int LoginHandler::queryUserId(const std::string &username, const std::string &pa
     }
     // 如果查询结果为空，则返回-1
     return -1;
-    // std::string sql = "SELECT id FROM users WHERE username = '" + username + "' AND password = '" + password + "'";
-    // std::shared_ptr<sql::ResultSet> res = mysqlUtil_.query(sql);
-    // if (res->next())
-    // {
-    //     int id = res->getInt("id");
-    //     return id;
-    //     // return res->getInt("id");
-    // }
-    // // 如果查询结果为空，则返回-1
-    // return -1;
 }
 

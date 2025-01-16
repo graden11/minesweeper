@@ -1,11 +1,11 @@
 #include "../include/handlers/LogoutHandler.h"
 
-void LogoutHandler::handle(const HttpRequest &req, HttpResponse *resp)
+void LogoutHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp)
 {
     auto contentType = req.getHeader("Content-Type");
     if (contentType.empty() || contentType != "application/json" || req.getBody().empty())
     {
-        resp->setStatusLine(req.getVersion(), HttpResponse::k400BadRequest, "Bad Request");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
         resp->setCloseConnection(true);
         resp->setContentType("application/json");
         resp->setContentLength(0);
@@ -47,7 +47,7 @@ void LogoutHandler::handle(const HttpRequest &req, HttpResponse *resp)
         json response;
         response["message"] = "logout successful";
         std::string responseBody = response.dump(4);
-        resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
         resp->setCloseConnection(true);
         resp->setContentType("application/json");
         resp->setContentLength(responseBody.size());
@@ -60,7 +60,7 @@ void LogoutHandler::handle(const HttpRequest &req, HttpResponse *resp)
         failureResp["status"] = "error";
         failureResp["message"] = e.what();
         std::string failureBody = failureResp.dump(4);
-        resp->setStatusLine(req.getVersion(), HttpResponse::k400BadRequest, "Bad Request");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
         resp->setCloseConnection(true);
         resp->setContentType("application/json");
         resp->setContentLength(failureBody.size());

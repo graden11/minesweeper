@@ -11,9 +11,8 @@
 #include "../../../HttpServer/include/http/HttpServer.h"
 #include "../../../HttpServer/include/utils/MysqlUtil.h"
 #include "../../../HttpServer/include/utils/FileUtil.h"
-//#include "../../../HttpServer/include/router/Router.h"
 #include "../../../HttpServer/include/utils/JsonUtil.h"
-// #include "./handlers/LoginHandler.h"
+
 
 class LoginHandler;
 class EntryHandler;
@@ -28,7 +27,6 @@ class GameBackendHandler;
 #define GAME_OVER 2
 
 #define MAX_AIBOT_NUM 4096
-
 
 class GomokuServer
 {
@@ -45,22 +43,22 @@ private:
     void initializeRouter();
     void initializeMiddleware();
     
-    void setSessionManager(std::unique_ptr<SessionManager> manager)
+    void setSessionManager(std::unique_ptr<http::session::SessionManager> manager)
     {
         httpServer_.setSessionManager(std::move(manager));
     }
 
-    SessionManager*  getSessionManager() const
+    http::session::SessionManager*  getSessionManager() const
     {
         return httpServer_.getSessionManager();
     }
     
-    void restartChessGameVsAi(const HttpRequest& req, HttpResponse* resp);
-    void getBackendData(const HttpRequest& req, HttpResponse* resp);
+    void restartChessGameVsAi(const http::HttpRequest& req, http::HttpResponse* resp);
+    void getBackendData(const http::HttpRequest& req, http::HttpResponse* resp);
 
-    void packageResp(const std::string& version, HttpResponse::HttpStatusCode statusCode,
+    void packageResp(const std::string& version, http::HttpResponse::HttpStatusCode statusCode,
                      const std::string& statusMsg, bool close, const std::string& contentType,
-                     int contentLen, const std::string& body, HttpResponse* resp);
+                     int contentLen, const std::string& body, http::HttpResponse* resp);
 
     // 获取历史最高在线人数
     int getMaxOnline() const
@@ -84,20 +82,13 @@ private:
     {
         std::string sql = "SELECT COUNT(*) as count FROM users";
 
-        std::shared_ptr<sql::ResultSet> res(mysqlUtil_.queryWithParams(sql));
+        sql::ResultSet* res = mysqlUtil_.executeQuery(sql);
         if (res->next())
         {
             return res->getInt("count");
         }
         return 0;
-        // std::shared_ptr<sql::ResultSet> res(mysqlUtil_.query(sql));
-        // if (res->next())
-        // {
-        //     return res->getInt("count");
-        // }
-        // return 0;
     }
-
     
 private:
     friend class EntryHandler;
@@ -118,19 +109,14 @@ private:
     };
     // 实际业务制定由GomokuServer来完成
     // 需要留意httpServer_提供哪些接口供使用
-    HttpServer httpServer_;
-    MysqlUtil  mysqlUtil_;
+    http::HttpServer                                 httpServer_;
+    http::MysqlUtil                                  mysqlUtil_;
     // userId -> AiBot
     std::unordered_map<int, std::shared_ptr<AiGame>> aiGames_;
-    std::mutex mutexForAiGames_;
+    std::mutex                                       mutexForAiGames_;
     // userId -> 是否在游戏中
-    std::unordered_map<int, bool> onlineUsers_;
-    std::mutex mutexForOnlineUsers_;
-     
+    std::unordered_map<int, bool>                    onlineUsers_;
+    std::mutex                                       mutexForOnlineUsers_; 
     // 最高在线人数
-    std::atomic<int> maxOnline_;
+    std::atomic<int>                                 maxOnline_;
 };
-
-// muduo库中的无锁机制保证线程安全，是在每次执行要操作共享资源的使用，
-// 都加上判断sendInLoop(), 加上某某inLoop，但是我们这里是某个线程里调用回调。有可能也是线程安全
-// 这里你得看看源码中，就是onMessage函数，看看咋调用。

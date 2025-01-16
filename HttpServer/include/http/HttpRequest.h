@@ -6,6 +6,9 @@
 
 #include <muduo/base/Timestamp.h>
 
+namespace http
+{
+
 class HttpRequest
 {
 public:
@@ -54,7 +57,8 @@ public:
     void setBody(const std::string& body) { content_ = body; }
     void setBody(const char* start, const char* end) 
     { 
-        if (end >= start) {
+        if (end >= start) 
+        {
             content_.assign(start, end - start); 
         }
     }
@@ -64,6 +68,7 @@ public:
 
     void setContentLength(uint64_t length)
     { contentLength_ = length; }
+    
     uint64_t contentLength() const
     { return contentLength_; }
 
@@ -81,4 +86,4 @@ private:
     uint64_t                                     contentLength_ { 0 }; // 请求体长度
 };  
 
-
+} // namespace http

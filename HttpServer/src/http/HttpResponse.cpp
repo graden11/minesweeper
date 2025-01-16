@@ -1,5 +1,8 @@
 #include "../../include/http/HttpResponse.h"
 
+namespace http
+{
+
 void HttpResponse::appendToBuffer(muduo::net::Buffer* outputBuf) const
 {
     // HttpResponse封装的信息格式化输出
@@ -42,3 +45,5 @@ void HttpResponse::setStatusLine(const std::string& version,
     statusCode_ = statusCode;
     statusMessage_ = statusMessage;
 }
+
+} // namespace http

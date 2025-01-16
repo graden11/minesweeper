@@ -1,6 +1,6 @@
 #include "../include/handlers/RegisterHandler.h"
 
-void RegisterHandler::handle(const HttpRequest& req, HttpResponse* resp)
+void RegisterHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
     // 解析body(json格式)
     json parsed = json::parse(req.getBody());
@@ -19,7 +19,7 @@ void RegisterHandler::handle(const HttpRequest& req, HttpResponse* resp)
         successResp["userId"] = userId;
         std::string successBody = successResp.dump(4);
 
-        resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
         resp->setCloseConnection(false);
         resp->setContentType("application/json");
         resp->setContentLength(successBody.size());
@@ -33,7 +33,7 @@ void RegisterHandler::handle(const HttpRequest& req, HttpResponse* resp)
         failureResp["message"] = "username already exists";
         std::string failureBody = failureResp.dump(4);
 
-        resp->setStatusLine(req.getVersion(), HttpResponse::k409Conflict, "Conflict");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k409Conflict, "Conflict");
         resp->setCloseConnection(false);
         resp->setContentType("application/json");
         resp->setContentLength(failureBody.size());
@@ -48,9 +48,9 @@ int RegisterHandler::insertUser(const std::string &username, const std::string &
     {
         // 用户不存在，插入用户
         std::string sql = "INSERT INTO users (username, password) VALUES ('" + username + "', '" + password + "')";
-        mysqlUtil_.operatorDB(sql);
+        mysqlUtil_.executeUpdate(sql);
         std::string sql2 = "SELECT id FROM users WHERE username = '" + username + "'";
-        std::shared_ptr<sql::ResultSet> res = mysqlUtil_.query(sql2);
+        sql::ResultSet* res = mysqlUtil_.executeQuery(sql2);
         if (res->next())
         {
             return res->getInt("id");
@@ -62,7 +62,7 @@ int RegisterHandler::insertUser(const std::string &username, const std::string &
 bool RegisterHandler::isUserExist(const std::string &username)
 {
     std::string sql = "SELECT id FROM users WHERE username = '" + username + "'";
-    std::shared_ptr<sql::ResultSet> res = mysqlUtil_.query(sql);
+    sql::ResultSet* res = mysqlUtil_.executeQuery(sql);
     if (res->next())
     {
         return true;

@@ -1,6 +1,6 @@
 #include "../include/handlers/AiGameMoveHandler.h"
 
-void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
+void AiGameMoveHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp)
 {
     try
     {
@@ -13,7 +13,7 @@ void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
             errorResp["message"] = "Unauthorized";
             std::string errorBody = errorResp.dump(4);
 
-            server_->packageResp(req.getVersion(), HttpResponse::k401Unauthorized,
+            server_->packageResp(req.getVersion(), http::HttpResponse::k401Unauthorized,
                                  "Unauthorized", true, "application/json", errorBody.size(),
                                  errorBody, resp);
             return;
@@ -41,7 +41,7 @@ void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
                 {"message", "Invalid move"}};
             std::string responseBody = response.dump();
 
-            resp->setStatusLine(req.getVersion(), HttpResponse::k400BadRequest, "Bad Request");
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
             resp->setCloseConnection(false);
             resp->setContentType("application/json");
             resp->setContentLength(responseBody.size());
@@ -59,7 +59,7 @@ void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
                 {"next_turn", "none"}};
             std::string responseBody = response.dump();
 
-            resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
             resp->setCloseConnection(false);
             resp->setContentType("application/json");
             resp->setContentLength(responseBody.size());
@@ -82,7 +82,7 @@ void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
                 {"next_turn", "none"}};
             std::string responseBody = response.dump();
 
-            resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
             resp->setCloseConnection(false);
             resp->setContentType("application/json");
             resp->setContentLength(responseBody.size());
@@ -109,7 +109,7 @@ void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
                 {"last_move", {{"x", game->getLastMove().first}, {"y", game->getLastMove().second}}}};
             std::string responseBody = response.dump();
 
-            resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
             resp->setCloseConnection(false);
             resp->setContentType("application/json");
             resp->setContentLength(responseBody.size());
@@ -133,7 +133,7 @@ void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
                 {"last_move", {{"x", game->getLastMove().first}, {"y", game->getLastMove().second}}}};
             std::string responseBody = response.dump();
 
-            resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
             resp->setCloseConnection(false);
             resp->setContentType("application/json");
             resp->setContentLength(responseBody.size());
@@ -156,7 +156,7 @@ void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
 
         std::string responseBody = response.dump();
 
-        resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
         resp->setCloseConnection(false);
         resp->setContentType("application/json");
         resp->setContentLength(responseBody.size());
@@ -168,6 +168,6 @@ void AiGameMoveHandler::handle(const HttpRequest &req, HttpResponse *resp)
             {"status", "error"},
             {"message", e.what()}};
         std::string responseBody = response.dump();
-        server_->packageResp(req.getVersion(), HttpResponse::k500InternalServerError, "Internal Server Error", false, "application/json", responseBody.size(), responseBody, resp);
+        server_->packageResp(req.getVersion(), http::HttpResponse::k500InternalServerError, "Internal Server Error", false, "application/json", responseBody.size(), responseBody, resp);
     }
 }

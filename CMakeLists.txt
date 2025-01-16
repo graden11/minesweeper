@@ -5,6 +5,9 @@ project(simple_server)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 在文件开头添加 OpenSSL 查找
+find_package(OpenSSL REQUIRED)
+
 # 添加头文件路径
 include_directories(
     ${PROJECT_SOURCE_DIR}
@@ -13,6 +16,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/WebApps/GomokuServer/include
     /usr/include/mysql-cppconn-8
     /usr/include/mysql
+    ${OPENSSL_INCLUDE_DIR}
 )
 
 # 查找必要的库
@@ -66,6 +70,8 @@ target_link_libraries(simple_server
     muduo_base
     mysqlcppconn
     mysqlclient
+    ssl
+    crypto
 )
 
 # 打印调试信息

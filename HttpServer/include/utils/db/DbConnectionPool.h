@@ -3,15 +3,20 @@
 #include <mutex>
 #include <condition_variable>
 #include <memory>
+#include <thread>
 #include "DbConnection.h"
 
-namespace http {
-namespace db {
+namespace http 
+{
+namespace db 
+{
 
-class DbConnectionPool {
+class DbConnectionPool 
+{
 public:
     // 单例模式
-    static DbConnectionPool& getInstance() {
+    static DbConnectionPool& getInstance() 
+    {
         static DbConnectionPool instance;
         return instance;
     }
@@ -28,7 +33,7 @@ public:
 
 private:
     // 构造函数
-    DbConnectionPool() = default;
+    DbConnectionPool();
     // 析构函数
     ~DbConnectionPool();
 
@@ -38,16 +43,18 @@ private:
 
     std::shared_ptr<DbConnection> createConnection();
 
+    void checkConnections(); // 添加连接检查方法
+
 private:
-    std::string host_;
-    std::string user_;
-    std::string password_;
-    std::string database_;
-    
+    std::string                               host_;
+    std::string                               user_;
+    std::string                               password_;
+    std::string                               database_;
     std::queue<std::shared_ptr<DbConnection>> connections_;
-    std::mutex mutex_;
-    std::condition_variable cv_;
-    bool initialized_ = false;
+    std::mutex                                mutex_;
+    std::condition_variable                   cv_;
+    bool                                      initialized_ = false;
+    std::thread                               checkThread_; // 添加检查线程
 };
 
 } // namespace db

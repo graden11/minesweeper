@@ -1,6 +1,11 @@
 #include "../../include/router/Router.h"
 #include <muduo/base/Logging.h>
 
+namespace http
+{
+namespace router
+{
+
 void Router::registerHandler(HttpRequest::Method method, const std::string &path, HandlerPtr handler)
 {
     RouteKey key{method, path};
@@ -69,3 +74,6 @@ bool Router::route(const HttpRequest &req, HttpResponse *resp)
 
     return false;
 }
+
+} // namespace router
+} // namespace http

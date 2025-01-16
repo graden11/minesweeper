@@ -5,16 +5,17 @@
 #include "../../../HttpServer/include/utils/JsonUtil.h"
 
 
-class LoginHandler : public RouterHandler {
+class LoginHandler : public http::router::RouterHandler 
+{
 public:
     explicit LoginHandler(GomokuServer* server) : server_(server) {}
     
-    void handle(const HttpRequest& req, HttpResponse* resp) override;
+    void handle(const http::HttpRequest& req, http::HttpResponse* resp) override;
 
 private:
     int queryUserId(const std::string& username, const std::string& password);
 
 private:
-    GomokuServer* server_;
-    MysqlUtil     mysqlUtil_;
+    GomokuServer*       server_;
+    http::MysqlUtil     mysqlUtil_;
 };

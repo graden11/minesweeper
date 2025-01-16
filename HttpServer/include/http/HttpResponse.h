@@ -2,6 +2,9 @@
 
 #include <muduo/net/TcpServer.h>
 
+namespace http
+{
+
 class HttpResponse 
 {
 public:
@@ -72,3 +75,5 @@ private:
     std::string                        body_;
     bool                               isFile_;
 };
+
+} // namespace http

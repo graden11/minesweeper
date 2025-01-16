@@ -1,6 +1,6 @@
 #include "../include/handlers/GameBackendHandler.h"
 
-void GameBackendHandler::handle(const HttpRequest& req, HttpResponse* resp)
+void GameBackendHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
     // 后台界面
     // 获取当前在线人数、历史最高在线人数、数据库中已注册用户总数
@@ -16,7 +16,7 @@ void GameBackendHandler::handle(const HttpRequest& req, HttpResponse* resp)
     fileOperater.readFile(buffer); // 读出文件数据
     std::string htmlContent(buffer.data(), buffer.size());
 
-    resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+    resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
     resp->setCloseConnection(false);
     resp->setContentType("text/html");
     resp->setContentLength(htmlContent.size());

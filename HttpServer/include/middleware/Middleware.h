@@ -3,10 +3,13 @@
 #include "../http/HttpRequest.h"
 #include "../http/HttpResponse.h"
 
-namespace http {
-namespace middleware {
+namespace http 
+{
+namespace middleware 
+{
 
-class Middleware {
+class Middleware 
+{
 public:
     virtual ~Middleware() = default;
     
@@ -17,7 +20,8 @@ public:
     virtual void after(HttpResponse& response) = 0;
     
     // 设置下一个中间件
-    void setNext(std::shared_ptr<Middleware> next) {
+    void setNext(std::shared_ptr<Middleware> next) 
+    {
         nextMiddleware_ = next;
     }
 

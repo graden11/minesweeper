@@ -6,6 +6,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <mutex>
 
 const int BOARD_SIZE = 15;
 
@@ -18,13 +19,10 @@ class AiGame
 public:
     AiGame(int userId);
 
-    void start()
-    {
-    }
-
+    // 判断是否平局
     bool isDraw() const
     {
-        // 判断是否平局
+        std::lock_guard<std::mutex> lock(mutex_);
         return moveCount_ >= BOARD_SIZE * BOARD_SIZE;
     }
 
@@ -37,28 +35,33 @@ public:
     // 获取最后一步移动的坐标
     std::pair<int, int> getLastMove() const 
     {
+        std::lock_guard<std::mutex> lock(mutex_);
         return lastMove_;
     }
 
      // 获取当前棋盘状态
     const std::vector<std::vector<std::string>>& getBoard() const 
     { 
+        std::lock_guard<std::mutex> lock(mutex_);
         return board_; 
     }
 
     bool isGameOver() const 
     { 
+        std::lock_guard<std::mutex> lock(mutex_);
         return gameOver_; 
     }
 
     std::string getWinner() const 
     { 
+        std::lock_guard<std::mutex> lock(mutex_);
         return winner_; 
     }
 
 private:
     // 检查移动是否有效
-    bool isValidMove(int x, int y) const {
+    bool isValidMove(int x, int y) const 
+    {
         if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return false;
         if (board_[x][y] != EMPTY) return false;
         if (gameOver_ || isDraw()) return false;
@@ -79,10 +82,11 @@ private:
     bool isNearOccupied(int r, int c);
 
 private:
-    bool gameOver_;
-    int userId_;
-    int moveCount_;
-    std::string winner_{"none"};
-    std::pair<int, int> lastMove_{-1, -1};  // 上一次落子位置
+    bool                                  gameOver_;
+    int                                   userId_;
+    int                                   moveCount_;
+    std::string                           winner_{"none"};
+    std::pair<int, int>                   lastMove_{-1, -1};  // 上一次落子位置
     std::vector<std::vector<std::string>> board_;
+    mutable std::mutex                    mutex_;  // 添加互斥锁
 };

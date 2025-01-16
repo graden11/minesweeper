@@ -1,5 +1,8 @@
 #include "../../include/http/HttpRequest.h"
 
+namespace http
+{
+
 void HttpRequest::setReceiveTime(muduo::Timestamp t)
 {
     receiveTime_ = t;
@@ -138,3 +141,5 @@ void HttpRequest::swap(HttpRequest &that)
     std::swap(headers_, that.headers_);
     std::swap(receiveTime_, that.receiveTime_);
 }
+
+} // namespace http

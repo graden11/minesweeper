@@ -6,6 +6,12 @@
 #include "../include/handlers/LogoutHandler.h"
 #include "../include/handlers/AiGameMoveHandler.h"
 #include "../include/handlers/GameBackendHandler.h"
+#include "../include/GomokuServer.h"
+#include "../../../HttpServer/include/http/HttpRequest.h"
+#include "../../../HttpServer/include/http/HttpResponse.h"
+#include "../../../HttpServer/include/http/HttpServer.h"
+
+using namespace http;
 
 GomokuServer::GomokuServer(int port,
                            const std::string &name,
@@ -27,10 +33,8 @@ void GomokuServer::start()
 
 void GomokuServer::initialize()
 {
-    // driver_->connect("tcp://127.0.0.1:3306", "wy", "wy2959002395"));
-    //         conn_->setSchema("Gomoku");
     // 初始化数据库连接池
-    MysqlUtil::init("tcp://127.0.0.1:3306", "wy", "wy2959002395", "Gomoku", 10);
+    http::MysqlUtil::init("tcp://127.0.0.1:3306", "wy", "wy2959002395", "Gomoku", 10);
     // 初始化会话
     initializeSession();
     // 初始化中间件
@@ -42,9 +46,9 @@ void GomokuServer::initialize()
 void GomokuServer::initializeSession()
 {
     // 创建会话存储
-    auto sessionStorage = std::make_unique<MemorySessionStorage>();
+    auto sessionStorage = std::make_unique<http::session::MemorySessionStorage>();
     // 创建会话管理器
-    auto sessionManager = std::make_unique<SessionManager>(std::move(sessionStorage));
+    auto sessionManager = std::make_unique<http::session::SessionManager>(std::move(sessionStorage));
     // 设置会话管理器
     setSessionManager(std::move(sessionManager));
 }
@@ -76,14 +80,20 @@ void GomokuServer::initializeRouter()
     // 下棋
     httpServer_.Post("/aiBot/move", std::make_shared<AiGameMoveHandler>(this));
     // 重新开始对战ai
-    httpServer_.Get("/aiBot/restart", std::bind(&GomokuServer::restartChessGameVsAi, this, std::placeholders::_1, std::placeholders::_2));
+    httpServer_.Get("/aiBot/restart", 
+    [this](const http::HttpRequest& req, http::HttpResponse* resp) {
+            restartChessGameVsAi(req, resp);
+    });
+
     // 后台界面
     httpServer_.Get("/backend", std::make_shared<GameBackendHandler>(this));
     // 后台数据获取
-    httpServer_.Get("/backend_data", std::bind(&GomokuServer::getBackendData, this, std::placeholders::_1, std::placeholders::_2));
+    httpServer_.Get("/backend_data", [this](const http::HttpRequest& req, http::HttpResponse* resp) {
+        getBackendData(req, resp);
+    });
 }
 
-void GomokuServer::restartChessGameVsAi(const HttpRequest &req, HttpResponse *resp)
+void GomokuServer::restartChessGameVsAi(const http::HttpRequest &req, http::HttpResponse *resp)
 {
     // 解析请求体
     auto session = getSessionManager()->getSession(req, resp);
@@ -95,7 +105,7 @@ void GomokuServer::restartChessGameVsAi(const HttpRequest &req, HttpResponse *re
         errorResp["message"] = "Unauthorized";
         std::string errorBody = errorResp.dump(4);
 
-        packageResp(req.getVersion(), HttpResponse::k401Unauthorized,
+        packageResp(req.getVersion(), http::HttpResponse::k401Unauthorized,
                     "Unauthorized", true, "application/json", errorBody.size(),
                     errorBody, resp);
         return;
@@ -115,13 +125,14 @@ void GomokuServer::restartChessGameVsAi(const HttpRequest &req, HttpResponse *re
     successResp["message"] = "restart successful";
     successResp["userId"] = userId;
     std::string successBody = successResp.dump(4);
-    packageResp(req.getVersion(), HttpResponse::k200Ok, "OK", false, "application/json", successBody.size(), successBody, resp);
+    packageResp(req.getVersion(), http::HttpResponse::k200Ok, "OK", false, "application/json", successBody.size(), successBody, resp);
 }
 
 // 获取后台数据
-void GomokuServer::getBackendData(const HttpRequest &req, HttpResponse *resp)
+void GomokuServer::getBackendData(const http::HttpRequest &req, http::HttpResponse *resp)
 {
-    try {
+    try 
+    {
         // 获取数据
         int curOnline = getCurOnline();
         LOG_INFO << "当前在线人数: " << curOnline;
@@ -144,7 +155,7 @@ void GomokuServer::getBackendData(const HttpRequest &req, HttpResponse *resp)
         std::string responseStr = respBody.dump(4);
         
         // 设置响应
-        resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
         resp->setContentType("application/json");
         resp->setBody(responseStr);
         resp->setContentLength(responseStr.size());
@@ -152,7 +163,8 @@ void GomokuServer::getBackendData(const HttpRequest &req, HttpResponse *resp)
 
         LOG_INFO << "Backend data response prepared successfully";
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e) 
+    {
         LOG_ERROR << "Error in getBackendData: " << e.what();
         
         // 错误响应
@@ -162,7 +174,7 @@ void GomokuServer::getBackendData(const HttpRequest &req, HttpResponse *resp)
         };
         
         std::string errorStr = errorBody.dump();
-        resp->setStatusCode(HttpResponse::k500InternalServerError);
+        resp->setStatusCode(http::HttpResponse::k500InternalServerError);
         resp->setStatusMessage("Internal Server Error");
         resp->setContentType("application/json");
         resp->setBody(errorStr);
@@ -172,20 +184,22 @@ void GomokuServer::getBackendData(const HttpRequest &req, HttpResponse *resp)
 }
 
 void GomokuServer::packageResp(const std::string &version,
-                             HttpResponse::HttpStatusCode statusCode,
+                             http::HttpResponse::HttpStatusCode statusCode,
                              const std::string &statusMsg,
                              bool close,
                              const std::string &contentType,
                              int contentLen,
                              const std::string &body,
-                             HttpResponse *resp)
+                             http::HttpResponse *resp)
 {
-    if (resp == nullptr) {
+    if (resp == nullptr) 
+    {
         LOG_ERROR << "Response pointer is null";
         return;
     }
 
-    try {
+    try 
+    {
         resp->setVersion(version);
         resp->setStatusCode(statusCode);
         resp->setStatusMessage(statusMsg);
@@ -196,10 +210,11 @@ void GomokuServer::packageResp(const std::string &version,
         
         LOG_INFO << "Response packaged successfully";
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e) 
+    {
         LOG_ERROR << "Error in packageResp: " << e.what();
         // 设置一个基本的错误响应
-        resp->setStatusCode(HttpResponse::k500InternalServerError);
+        resp->setStatusCode(http::HttpResponse::k500InternalServerError);
         resp->setStatusMessage("Internal Server Error");
         resp->setCloseConnection(true);
     }

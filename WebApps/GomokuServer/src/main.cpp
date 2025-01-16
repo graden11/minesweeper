@@ -1,5 +1,5 @@
 #include <string>
-
+#include <iostream>
 #include <muduo/net/TcpServer.h>
 #include <muduo/base/Logging.h>
 #include <muduo/net/EventLoop.h>
@@ -31,9 +31,7 @@ int main(int argc, char* argv[])
   }
   
   muduo::Logger::setLogLevel(muduo::Logger::WARN);
-  //WebServer server(listenAddr, serverName);
   GomokuServer server(port, serverName);
-  server.setThreadNum(4);
   server.setThreadNum(4);
   server.start();
 }

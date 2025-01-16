@@ -1,61 +1,37 @@
-#include <iostream>
-#include <memory>
-#include "../include/http/HttpServer.h"
-#include "../include/http/HttpRequest.h"
-#include "../include/http/HttpResponse.h"
-#include "../include/router/Router.h"
+// #include "http/HttpServer.h"
+// #include <muduo/net/EventLoop.h>
 
+// int main() {
+//     muduo::net::EventLoop loop;
+//     muduo::net::InetAddress listenAddr(443); // HTTPS 默认端口
 
-// 示例处理器类
-class HelloWorldHandler : public RouterHandler {
-public:
-    void handle(const HttpRequest& req, HttpResponse* resp) override {
-        // 处理 GET 请求
-        if (req.method() == HttpRequest::kGet) 
-        {
-            resp->setStatusCode(HttpResponse::k200Ok);
-            resp->setStatusMessage("OK");
-            resp->setCloseConnection(true);
-            resp->setBody("Hello, World!");
-        } else 
-        {
-            resp->setStatusCode(HttpResponse::k404NotFound);
-            resp->setStatusMessage("Not Found");
-            resp->setCloseConnection(true);
-            resp->setBody("Method Not Allowed");
-        }
-    }
-};
+//     // 创建 HTTPS 服务器
+//     HttpServer server(443, "https_server", true); // 启用 SSL
 
-class EchoHandler : public RouterHandler {
-public:
-    void handle(const HttpRequest& req, HttpResponse* resp) override {
-        // 处理 POST 请求
-        if (req.method() == HttpRequest::kPost) 
-        {
-            resp->setStatusCode(HttpResponse::k200Ok);
-            resp->setBody("Echo: " + req.getBody());
-        } 
-        else 
-        {
-            resp->setStatusCode(HttpResponse::k404NotFound);
-            resp->setStatusMessage("Not Found");
-            resp->setCloseConnection(true);
-            resp->setBody("Method Not Allowed");
-        }
-    }
-};
-
-int main() {
-
-    // 创建 HTTP 服务器
-    HttpServer server(8888, "HttpServer"); // 监听8080端口
-
-    server.Get("/hello", std::make_shared<HelloWorldHandler>());
-    server.Post("/echo", std::make_shared<EchoHandler>());
+//     // 配置 SSL
+//     ssl::SslConfig sslConfig;
+//     sslConfig.setCertificateFile("/etc/letsencrypt/live/your-domain.com/fullchain.pem");
+//     sslConfig.setPrivateKeyFile("/etc/letsencrypt/live/your-domain.com/privkey.pem");
+//     sslConfig.setProtocolVersion(ssl::SSLVersion::TLS_1_2);
     
-    server.setThreadNum(4);
-    server.start();
+//     // 可选：配置证书链
+//     sslConfig.setCertificateChainFile("/path/to/chain.crt");
+    
+//     // 可选：配置加密套件
+//     sslConfig.setCipherList("HIGH:!aNULL:!MD5");
+    
+//     // 可选：配置会话缓存
+//     sslConfig.setSessionTimeout(300);
+//     sslConfig.setSessionCacheSize(20480);
 
-    return 0;
-}
+//     // 设置 SSL 配置
+//     server.setSslConfig(sslConfig);
+
+//     // 启动服务器
+//     server.start();
+    
+//     // 运行事件循环
+//     loop.loop();
+    
+//     return 0;
+// }

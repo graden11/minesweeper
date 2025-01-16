@@ -2,12 +2,12 @@
 #include "../../../../HttpServer/include/router/RouterHandler.h"
 #include "../GomokuServer.h"
 
-class AiGameStartHandler : public RouterHandler
+class AiGameStartHandler : public http::router::RouterHandler
 {
 public:
     explicit AiGameStartHandler(GomokuServer* server) : server_(server) {}
 
-    void handle(const HttpRequest& req, HttpResponse* resp) override;
+    void handle(const http::HttpRequest& req, http::HttpResponse* resp) override;
 
 private:
     GomokuServer* server_;

@@ -2,6 +2,9 @@
 
 #include <any>
 
+namespace http
+{
+
 // 默认http回应函数
 void defaultHttpCallback(const HttpRequest &, HttpResponse *resp)
 {
@@ -12,9 +15,11 @@ void defaultHttpCallback(const HttpRequest &, HttpResponse *resp)
 
 HttpServer::HttpServer(int port,
                        const std::string &name,
+                       bool useSSL,
                        muduo::net::TcpServer::Option option)
     : listenAddr_(port)
     , server_(&mainLoop_, listenAddr_, name, option)
+    , useSSL_(useSSL)
     , httpCallback_(std::bind(&HttpServer::handleRequest, this, std::placeholders::_1, std::placeholders::_2))
 {
     initialize();
@@ -40,12 +45,38 @@ void HttpServer::initialize()
                   std::placeholders::_3));
 }
 
+void HttpServer::setSslConfig(const ssl::SslConfig& config)
+{
+    if (useSSL_)
+    {
+        sslCtx_ = std::make_unique<ssl::SslContext>(config);
+        if (!sslCtx_->initialize())
+        {
+            LOG_ERROR << "Failed to initialize SSL context";
+            abort();
+        }
+    }
+}
+
 void HttpServer::onConnection(const muduo::net::TcpConnectionPtr &conn)
 {
     // 给连接设置一个HttpContext对象用于解析请求报文，提取封装请求信息
     if (conn->connected())
     {
+        if (useSSL_)
+        {
+            auto sslConn = std::make_unique<ssl::SslConnection>(conn, sslCtx_.get());
+            sslConns_[conn] = std::move(sslConn);
+            sslConns_[conn]->startHandshake();
+        }
         conn->setContext(HttpContext());
+    }
+    else 
+    {
+        if (useSSL_)
+        {
+            sslConns_.erase(conn);
+        }
     }
 }
 
@@ -55,6 +86,32 @@ void HttpServer::onMessage(const muduo::net::TcpConnectionPtr &conn,
 {
     try
     {
+        // 这层判断只是代表是否支持ssl
+        if (useSSL_)
+        {
+            // 1.查找对应的SSL连接
+            auto it = sslConns_.find(conn);
+            if (it != sslConns_.end())
+            {
+                // 2. SSL连接处理数据
+                it->second->onRead(conn, buf, receiveTime);
+
+                // 3. 如果 SSL 握手还未完成，直接返回
+                if (!it->second->isHandshakeCompleted())
+                {
+                    return;
+                }
+
+                // 4. 从SSL连接的解密缓冲区获取数据
+                muduo::net::Buffer* decryptedBuf = it->second->getDecryptedBuffer();
+                if (decryptedBuf->readableBytes() == 0)
+                    return; // 没有解密后的数据
+
+                // 5. 使用解密后的数据进行HTTP 处理
+                buf = decryptedBuf; // 将 buf 指向解密后的数据
+
+            }
+        }
         // HttpContext对象用于解析出buf中的请求报文，并把报文的关键信息封装到HttpRequest对象中
         HttpContext *context = boost::any_cast<HttpContext>(conn->getMutableContext());
         if (!context->parseRequest(buf, receiveTime)) // 解析一个http请求
@@ -137,3 +194,5 @@ void HttpServer::handleRequest(const HttpRequest &req, HttpResponse *resp)
         resp->setBody(e.what());
     }
 }
+
+} // namespace http

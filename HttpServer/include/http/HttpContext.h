@@ -6,6 +6,9 @@
 
 #include "HttpRequest.h"
 
+namespace http
+{
+
 class HttpContext 
 {
 public:
@@ -22,7 +25,8 @@ public:
     {}
 
     bool parseRequest(muduo::net::Buffer* buf, muduo::Timestamp receiveTime);
-    bool gotAll() const { return state_ == kGotAll;  }
+    bool gotAll() const 
+    { return state_ == kGotAll;  }
 
     void reset()
     {
@@ -38,9 +42,10 @@ public:
     { return request_;}
 
 private:
-    bool processRequestLine(const char* begin, const char* end);\
-
+    bool processRequestLine(const char* begin, const char* end);
 private:
     HttpRequestParseState state_;
     HttpRequest           request_;
 };
+
+} // namespace http

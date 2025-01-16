@@ -4,12 +4,12 @@
 #include "../GomokuServer.h"
 
 
-class MenuHandler : public RouterHandler
+class MenuHandler : public http::router::RouterHandler
 {
 public:
     explicit MenuHandler(GomokuServer* server) : server_(server) {}
 
-    void handle(const HttpRequest& req, HttpResponse* resp) override;
+    void handle(const http::HttpRequest& req, http::HttpResponse* resp) override;
 private:
     GomokuServer* server_;
 };

@@ -11,6 +11,11 @@
 #include "../http/HttpRequest.h"
 #include "../http/HttpResponse.h"
 
+namespace http
+{
+namespace router
+{
+
 // 选择注册对象式的路由处理器还是注册回调函数式的处理器取决于处理器执行的复杂程度
 // 如果是简单的处理可以注册回调函数，否则注册对象式路由处理器(对象中可封装多个相关函数)
 // 二者注册其一即可
@@ -107,8 +112,12 @@ private:
             : method_(method), pathRegex_(pathRegex), handler_(handler) {}
     };
 
-    std::unordered_map<RouteKey, HandlerPtr, RouteKeyHash> handlers_;       // 精准匹配
+    std::unordered_map<RouteKey, HandlerPtr, RouteKeyHash>      handlers_;       // 精准匹配
     std::unordered_map<RouteKey, HandlerCallback, RouteKeyHash> callbacks_; // 精准匹配
-    std::vector<RouteHandlerObj> regexHandlers_;     // 正则匹配
-    std::vector<RouteCallbackObj>  regexCallbacks_;   // 正则匹配
+    std::vector<RouteHandlerObj>                                regexHandlers_;     // 正则匹配
+    std::vector<RouteCallbackObj>                               regexCallbacks_;   // 正则匹配
 };
+
+
+} // namespace router
+} // namespace http

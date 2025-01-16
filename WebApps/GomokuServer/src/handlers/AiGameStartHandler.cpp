@@ -1,9 +1,7 @@
 #include "../include/handlers/AiGameStartHandler.h"
 
-void AiGameStartHandler::handle(const HttpRequest &req, HttpResponse *resp)
+void AiGameStartHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp)
 {
-    // 现在才是选择对战ai，所以这里创建一个ai机器人
-
     auto session = server_->getSessionManager()->getSession(req, resp);
     if (session->getValue("isLoggedIn") != "true")
     {
@@ -13,7 +11,7 @@ void AiGameStartHandler::handle(const HttpRequest &req, HttpResponse *resp)
         errorResp["message"] = "Unauthorized";
         std::string errorBody = errorResp.dump(4);
 
-        server_->packageResp(req.getVersion(), HttpResponse::k401Unauthorized,
+        server_->packageResp(req.getVersion(), http::HttpResponse::k401Unauthorized,
                              "Unauthorized", true, "application/json", errorBody.size(),
                              errorBody, resp);
         return;
@@ -42,7 +40,7 @@ void AiGameStartHandler::handle(const HttpRequest &req, HttpResponse *resp)
     fileOperater.readFile(buffer);
     std::string htmlContent(buffer.data(), buffer.size());
 
-    resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+    resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
     resp->setCloseConnection(false);
     resp->setContentType("text/html");
     resp->setContentLength(htmlContent.size());

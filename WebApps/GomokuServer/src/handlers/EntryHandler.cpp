@@ -1,6 +1,6 @@
 #include "../include/handlers/EntryHandler.h"
 
-void EntryHandler::handle(const HttpRequest& req, HttpResponse* resp)
+void EntryHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
     // 因为是get请求，请求的url也拿到了，我们就可以直接返回响应了
     std::string reqFile;
@@ -16,7 +16,7 @@ void EntryHandler::handle(const HttpRequest& req, HttpResponse* resp)
     fileOperater.readFile(buffer); // 读出文件数据
     std::string bufStr = std::string(buffer.data(), buffer.size());
     
-    resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+    resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
     resp->setCloseConnection(false);
     resp->setContentType("text/html");
     resp->setContentLength(bufStr.size());

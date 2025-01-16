@@ -1,6 +1,6 @@
 #include "../include/handlers/MenuHandler.h"
 
-void MenuHandler::handle(const HttpRequest &req, HttpResponse *resp)
+void MenuHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp)
 {
     // JSON 解析使用 try catch 捕获异常
     try
@@ -16,7 +16,7 @@ void MenuHandler::handle(const HttpRequest &req, HttpResponse *resp)
             errorResp["message"] = "Unauthorized";
             std::string errorBody = errorResp.dump(4);
 
-            server_->packageResp(req.getVersion(), HttpResponse::k401Unauthorized,
+            server_->packageResp(req.getVersion(), http::HttpResponse::k401Unauthorized,
                                 "Unauthorized", true, "application/json", errorBody.size(),
                                  errorBody, resp);
             return;
@@ -48,7 +48,7 @@ void MenuHandler::handle(const HttpRequest &req, HttpResponse *resp)
 
         // server_->packageResp(req.getVersion(), HttpResponse::k200Ok, "OK"
         //             , false, "text/html", htmlContent.size(), htmlContent, resp);
-        resp->setStatusLine(req.getVersion(), HttpResponse::k200Ok, "OK");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
         resp->setCloseConnection(false);
         resp->setContentType("text/html");
         resp->setContentLength(htmlContent.size());
@@ -61,7 +61,7 @@ void MenuHandler::handle(const HttpRequest &req, HttpResponse *resp)
         failureResp["status"] = "error";
         failureResp["message"] = e.what();
         std::string failureBody = failureResp.dump(4);
-        resp->setStatusLine(req.getVersion(), HttpResponse::k400BadRequest, "Bad Request");
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
         resp->setCloseConnection(true);
         resp->setContentType("application/json");
         resp->setContentLength(failureBody.size());

@@ -1,6 +1,12 @@
 #include "../include/session/SessionStorage.h"
 #include <iostream>
 
+namespace http
+{
+
+namespace session
+{
+
 void MemorySessionStorage::save(std::shared_ptr<Session> session)
 {
     // 创建会话副本并存储
@@ -33,3 +39,6 @@ void MemorySessionStorage::remove(const std::string& sessionId)
 {
     sessions_.erase(sessionId);
 }
+
+} // namespace session
+} // namespace http

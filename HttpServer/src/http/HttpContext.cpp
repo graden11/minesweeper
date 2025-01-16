@@ -3,6 +3,9 @@
 using namespace muduo;
 using namespace muduo::net;
 
+namespace http
+{
+
 // 将报文解析出来将关键信息封装到HttpRequest对象里面去
 bool HttpContext::parseRequest(Buffer *buf, Timestamp receiveTime)
 {
@@ -156,3 +159,5 @@ bool HttpContext::processRequestLine(const char *begin, const char *end)
     }
     return succeed;
 }
+
+} // namespace http

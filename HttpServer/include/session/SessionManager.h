@@ -6,6 +6,11 @@
 #include <memory>
 #include <random>
 
+namespace http
+{
+namespace session
+{
+
 class SessionManager
 {
 public:
@@ -34,3 +39,6 @@ private:
     std::unique_ptr<SessionStorage> storage_;
     std::mt19937 rng_; // 用于生成随机会话id
 };
+
+} // namespace session
+} // namespace http

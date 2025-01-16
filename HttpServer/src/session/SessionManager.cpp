@@ -3,6 +3,11 @@
 #include <iostream>
 #include <sstream>
 
+namespace http
+{
+namespace session
+{
+
 // 初始化会话管理器，设置会话存储对象和随机数生成器
 SessionManager::SessionManager(std::unique_ptr<SessionStorage> storage)
     : storage_(std::move(storage)) 
@@ -95,3 +100,6 @@ void SessionManager::setSessionCookie(const std::string& sessionId, HttpResponse
     std::string cookie = "sessionId=" + sessionId + "; Path=/; HttpOnly";
     resp->addHeader("Set-Cookie", cookie);
 }
+
+} // namespace session
+} // namespace http

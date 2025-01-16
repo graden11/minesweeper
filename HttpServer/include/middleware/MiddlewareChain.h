@@ -4,10 +4,13 @@
 #include <memory>
 #include "Middleware.h"
 
-namespace http {
-namespace middleware {
+namespace http 
+{
+namespace middleware 
+{
 
-class MiddlewareChain {
+class MiddlewareChain 
+{
 public:
     void addMiddleware(std::shared_ptr<Middleware> middleware);
     void processBefore(HttpRequest& request);

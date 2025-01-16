@@ -2,6 +2,11 @@
 
 #include "../include/session/SessionManager.h"
 
+namespace http
+{
+namespace session
+{
+
 Session::Session(const std::string& sessionId, SessionManager* sessionManager, int maxAge)
     : sessionId_(sessionId)
     , maxAge_(maxAge)
@@ -51,3 +56,6 @@ void Session::clear()
 {
     data_.clear();
 }
+
+} // namespace session
+} // namespace http

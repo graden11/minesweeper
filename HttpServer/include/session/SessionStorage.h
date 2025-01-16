@@ -2,6 +2,11 @@
 #include "Session.h"
 #include <memory>
 
+namespace http
+{
+namespace session
+{
+
 class SessionStorage
 {
 public:
@@ -21,3 +26,6 @@ public:
 private:
     std::unordered_map<std::string, std::shared_ptr<Session>> sessions_;
 };
+
+} // namespace session
+} // namespace http
