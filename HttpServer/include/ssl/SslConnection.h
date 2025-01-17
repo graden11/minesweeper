@@ -35,14 +35,14 @@ private:
     void handleError(SSLError error);
 
 private:
-    SSL*                ssl_;
-    SslContext*         ctx_;
-    TcpConnectionPtr    conn_;
-    SSLState            state_;
+    SSL*                ssl_; // SSL 连接
+    SslContext*         ctx_; // SSL 上下文
+    TcpConnectionPtr    conn_; // TCP 连接
+    SSLState            state_; // SSL 状态
     BIO*                readBio_;   // 网络数据 -> SSL
     BIO*                writeBio_;  // SSL -> 网络数据
-    muduo::net::Buffer  readBuffer_;
-    muduo::net::Buffer  writeBuffer_;
+    muduo::net::Buffer  readBuffer_; // 读缓冲区
+    muduo::net::Buffer  writeBuffer_; // 写缓冲区
     muduo::net::Buffer  decryptedBuffer_; // 解密后的数据
 };
 

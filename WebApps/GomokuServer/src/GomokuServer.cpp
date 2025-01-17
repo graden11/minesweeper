@@ -34,7 +34,7 @@ void GomokuServer::start()
 void GomokuServer::initialize()
 {
     // 初始化数据库连接池
-    http::MysqlUtil::init("tcp://127.0.0.1:3306", "wy", "wy2959002395", "Gomoku", 10);
+    http::MysqlUtil::init("tcp://127.0.0.1:3306", "root", "root", "Gomoku", 10);
     // 初始化会话
     initializeSession();
     // 初始化中间件

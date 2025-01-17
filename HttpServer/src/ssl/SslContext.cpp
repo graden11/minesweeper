@@ -59,14 +59,6 @@ bool SslContext::loadCertificates()
     if (SSL_CTX_use_PrivateKey_file(ctx_, 
         config_.getPrivateKeyFile().c_str(), SSL_FILETYPE_PEM) <= 0)
     {
-        handleSslError("Failed to load certificate");
-        return false;
-    }
-
-    // 加载私钥
-    if (SSL_CTX_use_PrivateKey_file(ctx_,
-     config_.getPrivateKeyFile().c_str(), SSL_FILETYPE_PEM) <= 0)
-    {
         handleSslError("Failed to load private key");
         return false;
     }
