@@ -9,6 +9,11 @@
 namespace ssl 
 {
 
+// 添加消息回调函数类型定义
+using MessageCallback = std::function<void(const std::shared_ptr<muduo::net::TcpConnection>&,
+                                         muduo::net::Buffer*,
+                                         muduo::Timestamp)>;
+
 class SslConnection : muduo::noncopyable 
 {
 public:
@@ -27,6 +32,8 @@ public:
     static int bioWrite(BIO* bio, const char* data, int len);
     static int bioRead(BIO* bio, char* data, int len);
     static long bioCtrl(BIO* bio, int cmd, long num, void* ptr);
+    // 设置消息回调函数
+    void setMessageCallback(const MessageCallback& cb) { messageCallback_ = cb; }
 private:
     void handleHandshake();
     void onEncrypted(const char* data, size_t len);
@@ -44,6 +51,7 @@ private:
     muduo::net::Buffer  readBuffer_; // 读缓冲区
     muduo::net::Buffer  writeBuffer_; // 写缓冲区
     muduo::net::Buffer  decryptedBuffer_; // 解密后的数据
+    MessageCallback     messageCallback_; // 消息回调
 };
 
 } // namespace ssl

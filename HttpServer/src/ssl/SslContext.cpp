@@ -21,12 +21,11 @@ SslContext::~SslContext()
 
 bool SslContext::initialize()
 {
-    // 初始化OpenSSL
-    SSL_library_init();
-    OpenSSL_add_all_algorithms();
-    SSL_load_error_strings();
+    // 初始化 OpenSSL
+    OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | 
+                    OPENSSL_INIT_LOAD_CRYPTO_STRINGS, nullptr);
 
-    // 创建SSL上下文
+    // 创建 SSL 上下文
     const SSL_METHOD* method = TLS_server_method();
     ctx_ = SSL_CTX_new(method);
     if (!ctx_)
@@ -35,13 +34,28 @@ bool SslContext::initialize()
         return false;
     }
 
+    // 设置 SSL 选项
+    long options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | 
+                  SSL_OP_NO_COMPRESSION |
+                  SSL_OP_CIPHER_SERVER_PREFERENCE;
+    SSL_CTX_set_options(ctx_, options);
+
     // 加载证书和私钥
-    if (!loadCertificates() || !setupProtocol())
+    if (!loadCertificates())
     {
         return false;
     }
 
+    // 设置协议版本
+    if (!setupProtocol())
+    {
+        return false;
+    }
+
+    // 设置会话缓存
     setupSessionCache();
+
+    LOG_INFO << "SSL context initialized successfully";
     return true;
 }
 

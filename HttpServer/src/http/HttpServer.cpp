@@ -1,6 +1,8 @@
 #include "../../include/http/HttpServer.h"
 
 #include <any>
+#include <functional>
+#include <memory>
 
 namespace http
 {
@@ -58,14 +60,15 @@ void HttpServer::setSslConfig(const ssl::SslConfig& config)
     }
 }
 
-void HttpServer::onConnection(const muduo::net::TcpConnectionPtr &conn)
+void HttpServer::onConnection(const muduo::net::TcpConnectionPtr& conn)
 {
-    // 给连接设置一个HttpContext对象用于解析请求报文，提取封装请求信息
     if (conn->connected())
     {
         if (useSSL_)
         {
             auto sslConn = std::make_unique<ssl::SslConnection>(conn, sslCtx_.get());
+            sslConn->setMessageCallback(
+                std::bind(&HttpServer::onMessage, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
             sslConns_[conn] = std::move(sslConn);
             sslConns_[conn]->startHandshake();
         }
@@ -89,16 +92,19 @@ void HttpServer::onMessage(const muduo::net::TcpConnectionPtr &conn,
         // 这层判断只是代表是否支持ssl
         if (useSSL_)
         {
+            LOG_INFO << "onMessage useSSL_ is true";
             // 1.查找对应的SSL连接
             auto it = sslConns_.find(conn);
             if (it != sslConns_.end())
             {
+                LOG_INFO << "onMessage sslConns_ is not empty";
                 // 2. SSL连接处理数据
                 it->second->onRead(conn, buf, receiveTime);
 
                 // 3. 如果 SSL 握手还未完成，直接返回
                 if (!it->second->isHandshakeCompleted())
                 {
+                    LOG_INFO << "onMessage sslConns_ is not empty";
                     return;
                 }
 
@@ -109,7 +115,7 @@ void HttpServer::onMessage(const muduo::net::TcpConnectionPtr &conn,
 
                 // 5. 使用解密后的数据进行HTTP 处理
                 buf = decryptedBuf; // 将 buf 指向解密后的数据
-
+                LOG_INFO << "onMessage decryptedBuf is not empty";
             }
         }
         // HttpContext对象用于解析出buf中的请求报文，并把报文的关键信息封装到HttpRequest对象中
