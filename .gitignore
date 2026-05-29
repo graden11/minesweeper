@@ -1,0 +1,20 @@
+# Build artifacts
+build/
+cmake-build-*/
+
+# IDE
+.idea/
+.vscode/
+
+# Model files (large binaries)
+WebApps/GomokuServer/models/
+
+# Backup files
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

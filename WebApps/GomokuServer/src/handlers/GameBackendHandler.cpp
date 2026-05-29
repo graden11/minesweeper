@@ -1,4 +1,5 @@
 #include "../include/handlers/GameBackendHandler.h"
+#include "../../../HttpServer/include/utils/FileUtil.h"
 
 void GameBackendHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {

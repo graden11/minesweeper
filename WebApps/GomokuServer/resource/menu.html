@@ -1,255 +1,541 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>卡码五子棋</title>
-    <style>
-        /* 全局样式 */
-        body {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: "Microsoft YaHei", Arial, sans-serif;
-            background-color: #1e1e2f;
-            color: #fff;
-            overflow: hidden;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 推理平台 · 控制台</title>
+<style>
+:root {
+  --color-bg: #0a0a14;
+  --color-surface: #12121f;
+  --color-card: rgba(255,255,255,0.04);
+  --color-border: rgba(255,255,255,0.08);
+  --color-primary: #00a8ff;
+  --color-primary-dim: rgba(0,168,255,0.15);
+  --color-accent: #5c6cf0;
+  --color-text: #e4e4ed;
+  --color-text-dim: #8888a0;
+  --color-error: #ff4d6a;
+  --color-success: #2ecc71;
+  --color-input-bg: rgba(255,255,255,0.06);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  --max-width: 1000px;
+}
 
-        /* 加载动画容器 */
-        #loading-container {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            text-align: center;
-        }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        /* 加载标题 */
-        #loading-title {
-            font-size: 2em;
-            margin-bottom: 20px;
-            color: #00c3ff;
-            text-shadow: 0 0 5px #00c3ff, 0 0 10px #008bff;
-        }
+html { font-size: 16px; }
 
-        /* 进度条 */
-        .progress-bar {
-            width: 300px;
-            height: 20px;
-            background: #444;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 0 10px #000;
-        }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
 
-        .progress-bar-inner {
-            height: 100%;
-            background: linear-gradient(to right, #00c3ff, #00e1ff);
-            width: 0;
-            transition: width 1.5s ease;
-        }
+body::before {
+  content: "";
+  position: fixed;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(0,168,255,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(92,108,240,0.04) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
 
-        /* 加载提示文字 */
-        #loading-text {
-            margin-top: 15px;
-            font-size: 1.2em;
-            color: #ccc;
-        }
+/* Header */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(10,10,20,0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--color-border);
+}
 
-        /* 菜单页面样式 */
-        #menu-container {
-            display: none;
-            text-align: center;
-            padding: 50px 20px;
-        }
+.header-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 30px;
-            color: #00c3ff;
-            text-shadow: 0 0 5px #00c3ff, 0 0 10px #008bff;
-        }
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-text);
+  text-decoration: none;
+}
 
-        .menu-option {
-            margin: 10px 0;
-            font-size: 1.5em;
-            color: #fff;
-            cursor: pointer;
-            transition: color 0.3s ease;
-        }
+.logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
 
-        .menu-option:hover {
-            color: #00e1ff;
-            text-shadow: 0 0 5px #00e1ff;
-        }
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
 
-        .menu-border {
-            margin: 10px auto;
-            width: 80%;
-            height: 2px;
-            background: #00c3ff;
-            box-shadow: 0 0 5px #00c3ff;
-        }
+.user-tag {
+  font-size: 0.85rem;
+  color: var(--color-text-dim);
+  padding: 4px 10px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+}
 
-        /* 输入提示样式 */
-        #input-hint {
-            font-size: 1.2em;
-            margin-top: 20px;
-            color: #00e1ff;
-        }
+.user-tag strong { color: var(--color-primary); font-weight: 600; }
 
-        input {
-            margin-top: 10px;
-            font-size: 1em;
-            padding: 5px 10px;
-            border-radius: 5px;
-            border: none;
-            outline: none;
-            text-align: center;
-            background-color: #333;
-            color: #fff;
-        }
-    </style>
+.btn-logout {
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  background: transparent;
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-logout:hover {
+  color: var(--color-error);
+  border-color: rgba(255,77,106,0.4);
+}
+
+/* Main */
+.main {
+  position: relative;
+  z-index: 1;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+/* Stats */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  margin-top: 4px;
+}
+
+/* Section titles */
+.section-title {
+  font-size: 1.2rem;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title::before {
+  content: "";
+  display: block;
+  width: 4px; height: 18px;
+  background: var(--color-primary);
+  border-radius: 2px;
+}
+
+/* Predict panel */
+.predict-section {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 28px;
+  margin-bottom: 32px;
+}
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.file-label {
+  display: inline-block;
+  padding: 10px 24px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+.file-label:hover { border-color: var(--color-primary); }
+
+#file-input { display: none; }
+
+#file-name {
+  font-size: 0.85rem;
+  color: var(--color-text-dim);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn {
+  padding: 10px 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: #fff;
+}
+.btn-primary:hover { opacity: 0.92; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+#loading-hint {
+  display: none;
+  margin-top: 14px;
+  color: var(--color-primary);
+  font-size: 0.9rem;
+}
+
+.results {
+  display: none;
+  margin-top: 20px;
+}
+
+.results h3 {
+  font-size: 0.95rem;
+  color: var(--color-text-dim);
+  margin-bottom: 10px;
+}
+
+.result-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  margin: 4px 0;
+  background: var(--color-input-bg);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+
+.result-item .score {
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* API reference */
+.api-section {
+  margin-bottom: 32px;
+}
+
+.api-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.api-table th, .api-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.api-table th {
+  color: var(--color-text-dim);
+  font-weight: 500;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.api-table td:first-child {
+  font-family: var(--font-mono);
+  color: var(--color-success);
+}
+
+.method-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.method-badge.get  { background: rgba(46,204,113,0.15); color: var(--color-success); }
+.method-badge.post { background: var(--color-primary-dim); color: var(--color-primary); }
+
+/* Footer */
+.footer {
+  border-top: 1px solid var(--color-border);
+  padding: 20px 24px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  position: relative;
+  z-index: 1;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stats-row { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat-card { padding: 14px 10px; }
+  .stat-value { font-size: 1.3rem; }
+  .upload-row { flex-direction: column; align-items: stretch; }
+  .predict-section { padding: 20px; }
+}
+
+@media (max-width: 480px) {
+  .header-inner { padding: 0 16px; }
+  .main { padding: 20px 16px; }
+  .stats-row { grid-template-columns: 1fr; }
+  .api-table { font-size: 0.8rem; }
+  .api-table th, .api-table td { padding: 8px 6px; }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+</style>
 </head>
-
 <body>
-    <!-- 加载动画 -->
-    <div id="loading-container">
-        <div id="loading-title">卡码五子棋</div>
-        <div class="progress-bar">
-            <div class="progress-bar-inner"></div>
-        </div>
-        <div id="loading-text">加载中...</div>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="/menu" class="logo">
+      <span class="logo-icon">&#9655;</span>
+      <span>推理平台</span>
+    </a>
+    <div class="header-right">
+      <span class="user-tag">用户: <strong id="header-user">—</strong></span>
+      <button class="btn-logout" id="btn-logout" type="button">退出</button>
     </div>
+  </div>
+</header>
 
-    <!-- 菜单页面 -->
-    <div id="menu-container">
-        <h1>欢迎来到卡码五子棋</h1>
-        <div class="menu-border"></div>
-        <div class="menu-option" id="play-ai">[1] 对战AI</div>
-        <div class="menu-option">[2] 匹配玩家</div>
-        <div class="menu-option">[0] 退出游戏</div>
+<main class="main">
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-online">—</div>
+      <div class="stat-label">当前在线</div>
     </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-requests">—</div>
+      <div class="stat-label">累计请求</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-models">—</div>
+      <div class="stat-label">活跃模型</div>
+    </div>
+  </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Page loaded'); // 调试日志
-            
-            const progressBar = document.querySelector('.progress-bar-inner');
-            const loadingContainer = document.getElementById('loading-container');
-            const menuContainer = document.getElementById('menu-container');
+  <!-- Predict -->
+  <section class="predict-section">
+    <div class="section-title">图像分类推理</div>
+    <div class="upload-row">
+      <label class="file-label" for="file-input">选择图片</label>
+      <input type="file" id="file-input" accept="image/*">
+      <span id="file-name">未选择文件</span>
+      <button class="btn btn-primary" id="upload-btn" disabled>开始推理</button>
+    </div>
+    <div id="loading-hint">推理中...</div>
+    <div class="results" id="results">
+      <h3>识别结果</h3>
+    </div>
+  </section>
 
-            if (!progressBar || !loadingContainer || !menuContainer) {
-                console.error('Required elements not found');
-                return;
-            }
+  <!-- API -->
+  <section class="api-section">
+    <div class="section-title">API 接口</div>
+    <table class="api-table">
+      <thead>
+        <tr><th>方法</th><th>路径</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="method-badge post">POST</span></td>
+          <td>/predict</td>
+          <td>JSON 图像推理 — 提交 base64 或文件路径，返回分类结果</td>
+        </tr>
+        <tr>
+          <td><span class="method-badge post">POST</span></td>
+          <td>/predict/proto</td>
+          <td>Protobuf 推理 — 二进制协议，高吞吐场景</td>
+        </tr>
+        <tr>
+          <td><span class="method-badge get">GET</span></td>
+          <td>/metrics</td>
+          <td>Prometheus 风格实时监控指标</td>
+        </tr>
+        <tr>
+          <td><span class="method-badge get">GET</span></td>
+          <td>/backend</td>
+          <td>系统运行统计面板</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
 
-            // 强制触发重排以确保动画生效
-            void progressBar.offsetWidth;
-            
-            // 设置进度条
-            progressBar.style.width = '100%';
+</main>
 
-            // 监听过渡结束事件
-            progressBar.addEventListener('transitionend', function() {
-                console.log('Progress bar animation completed');
-                loadingContainer.style.display = 'none';
-                menuContainer.style.display = 'block';
-            });
+<footer class="footer">
+  <p>AI 推理平台 &mdash; ONNX Runtime / TensorRT / C++ / RESTful</p>
+</footer>
 
-            // 添加超时保护
-            setTimeout(() => {
-                if (loadingContainer.style.display !== 'none') {
-                    console.log('Timeout triggered - forcing menu display');
-                    loadingContainer.style.display = 'none';
-                    menuContainer.style.display = 'block';
-                }
-            }, 2000); // 2秒后强制显示菜单
+<script>
+/* Auth check — server-injected const userId is already available */
+if (!sessionStorage.getItem('userId')) { window.location.href = '/entry'; }
+
+/* Header */
+document.getElementById('header-user').textContent = userId;
+
+document.getElementById('btn-logout').addEventListener('click', function() {
+  fetch('/user/logout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: userId })
+  }).finally(function() {
+    sessionStorage.clear();
+    window.location.href = '/entry';
+  });
+});
+
+/* Stats */
+function loadStats() {
+  fetch('/backend_data')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      document.getElementById('stat-online').textContent = d.curOnline;
+    })
+    .catch(function() {});
+
+  fetch('/metrics')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var total = 0;
+      for (var k in d) { if (d[k].total) total += d[k].total; }
+      document.getElementById('stat-requests').textContent = total;
+      var modelCount = d['/predict'] || d['/predict/proto'] ? 1 : 0;
+      if (d['/predict'] && d['/predict/proto']) modelCount = 2;
+      document.getElementById('stat-models').textContent = modelCount;
+    })
+    .catch(function() {
+      document.getElementById('stat-requests').textContent = '—';
+      document.getElementById('stat-models').textContent = '—';
+    });
+}
+loadStats();
+setInterval(loadStats, 30000);
+
+/* Predict */
+var fileInput = document.getElementById('file-input');
+var fileName  = document.getElementById('file-name');
+var uploadBtn = document.getElementById('upload-btn');
+var hint      = document.getElementById('loading-hint');
+var results   = document.getElementById('results');
+
+fileInput.addEventListener('change', function() {
+  if (fileInput.files.length > 0) {
+    fileName.textContent = fileInput.files[0].name;
+    uploadBtn.disabled = false;
+  } else {
+    fileName.textContent = '未选择文件';
+    uploadBtn.disabled = true;
+  }
+});
+
+uploadBtn.addEventListener('click', function() {
+  var file = fileInput.files[0];
+  if (!file) return;
+
+  uploadBtn.disabled = true;
+  hint.style.display = 'block';
+  results.style.display = 'none';
+
+  var reader = new FileReader();
+  reader.onload = function() {
+    fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_data: reader.result.split(',')[1] })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      hint.style.display = 'none';
+      uploadBtn.disabled = false;
+      results.innerHTML = '<h3>识别结果</h3>';
+      if (data.status === 'ok' && data.predictions) {
+        data.predictions.forEach(function(p) {
+          var item = document.createElement('div');
+          item.className = 'result-item';
+          item.innerHTML = '<span>' + p.label + '</span><span class="score">' + p.confidence.toFixed(1) + '%</span>';
+          results.appendChild(item);
         });
+      } else {
+        results.innerHTML += '<p style="color:var(--color-error)">识别失败</p>';
+      }
+      results.style.display = 'block';
+    })
+    .catch(function() {
+      hint.style.display = 'none';
+      uploadBtn.disabled = false;
+      results.innerHTML = '<h3>识别结果</h3><p style="color:var(--color-error)">网络错误</p>';
+      results.style.display = 'block';
+    });
+  };
+  reader.readAsDataURL(file);
+});
+</script>
 
-        // 对战AI功能
-        function startAiGame() {
-            const userId = sessionStorage.getItem('userId');
-            
-            fetch('/aiBot/start', {
-                method: 'GET',
-                headers: {
-                    'Accept': 'text/html'
-                }
-            })
-            .then(response => response.text())
-            .then(html => {
-                // 完全清除当前页面
-                document.open();
-                document.write(html);
-                document.close();
-                
-                // 确保在页面完全加载后初始化
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', function() {
-                        if (typeof initializeGame === 'function') {
-                            initializeGame();
-                        }
-                    });
-                } else {
-                    if (typeof initializeGame === 'function') {
-                        initializeGame();
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('启动AI对战失败，请稍后重试！');
-            });
-        }
-
-        // 绑定点击事件到对战AI按钮
-        document.getElementById('play-ai').addEventListener('click', startAiGame);
-
-        // 添加页面刷新/关闭时的处理
-        window.addEventListener('beforeunload', function(e) {
-            const userId = sessionStorage.getItem('userId');
-            if (userId) {
-                try {
-                    // 创建 Blob 对象，指定 content-type
-                    const data = new Blob([JSON.stringify({
-                        userId: userId,
-                        type: 'refresh',
-                        gameType: 0
-                    })], { type: 'application/json' });
-
-                    // 使用 navigator.sendBeacon 发送异步请求
-                    const success = navigator.sendBeacon('/user/logout', data);
-                    
-                    // 如果 sendBeacon 失败，尝试使用同步 XMLHttpRequest
-                    if (!success) {
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('POST', '/user/logout', false); // 同步请求
-                        xhr.setRequestHeader('Content-Type', 'application/json');
-                        xhr.send(JSON.stringify({
-                            userId: userId,
-                            type: 'refresh',
-                            gameType: 0
-                        }));
-                    }
-                } catch (error) {
-                    console.error('Logout error:', error);
-                }
-            }
-        });
-
-        // 添加页面加载时的用户检查
-        window.addEventListener('load', function() {
-            const userId = sessionStorage.getItem('userId');
-            if (!userId) {
-                window.location.href = '/entry';
-                return;
-            }
-        });
-    </script>
 </body>
-
 </html>

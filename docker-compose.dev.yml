@@ -1,0 +1,57 @@
+# 开发模式 — 源码挂载、即时编译、无需重建镜像
+# 用法:
+#   首次: docker compose -f docker-compose.dev.yml up -d --build
+#   C++ 改动后: docker compose -f docker-compose.dev.yml restart
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: kama-mysql-dev
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: Gomoku
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data_dev:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  httpserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: kama-httpserver:dev
+    container_name: kama-httpserver-dev
+    ports:
+      - "80:80"
+      - "1234:1234"
+    volumes:
+      - .:/project
+    depends_on:
+      mysql:
+        condition: service_healthy
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    working_dir: /project/build
+    command: >
+      bash -c "set -e;
+      cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_TENSORRT=OFF 2>/dev/null || true;
+      make -j$$(nproc);
+      echo '=== Build OK, starting ===';
+      ./simple_server -c /project/WebApps/GomokuServer/config.json"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  mysql_data_dev:

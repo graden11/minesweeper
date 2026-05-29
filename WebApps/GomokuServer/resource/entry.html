@@ -1,270 +1,692 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>卡码五子棋</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: #f0f0f0;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 推理平台</title>
+<style>
+:root {
+  --color-bg: #0a0a14;
+  --color-surface: #12121f;
+  --color-card: rgba(255,255,255,0.04);
+  --color-border: rgba(255,255,255,0.08);
+  --color-primary: #00a8ff;
+  --color-primary-dim: rgba(0,168,255,0.15);
+  --color-accent: #5c6cf0;
+  --color-text: #e4e4ed;
+  --color-text-dim: #8888a0;
+  --color-error: #ff4d6a;
+  --color-success: #2ecc71;
+  --color-input-bg: rgba(255,255,255,0.06);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  --max-width: 1100px;
+}
 
-        h1.title {
-            font-size: 36px;
-            font-weight: bold;
-            text-align: center;
-            color: #333;
-            margin-bottom: 30px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-            background: linear-gradient(to right, #008BFF, #00BFFF);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        .container {
-            width: 350px;
-            padding: 20px;
-            background: #ffffff;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            text-align: left;
-            box-sizing: border-box;
-        }
+html { font-size: 16px; scroll-behavior: smooth; }
 
-        h2 {
-            font-size: 24px;
-            margin-bottom: 20px;
-            text-align: center;
-            color: #333;
-        }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
 
-        .form-group {
-            margin-bottom: 15px;
-        }
+body::before {
+  content: "";
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(0,168,255,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(92,108,240,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(0,168,255,0.03) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
 
-        .form-group label {
-            display: block;
-            font-size: 14px;
-            color: #555;
-            margin-bottom: 5px;
-        }
+/* Header */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(10,10,20,0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--color-border);
+}
 
-        .form-group input {
-            width: calc(100% - 20px);
-            padding: 10px;
-            font-size: 14px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box;
-        }
+.header-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-        .btn {
-            width: 100%;
-            padding: 10px;
-            font-size: 16px;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-text);
+  text-decoration: none;
+}
 
-        .btn:hover {
-            background-color: #0056b3;
-        }
+.logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
 
-        .switch {
-            margin-top: 15px;
-            font-size: 14px;
-            text-align: center;
-            color: #555;
-        }
+.nav-links { display: flex; gap: 24px; list-style: none; }
+.nav-links a {
+  color: var(--color-text-dim);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--color-text); }
 
-        .switch a {
-            color: #007BFF;
-            text-decoration: none;
-            cursor: pointer;
-        }
+/* Main content */
+.main {
+  position: relative;
+  z-index: 1;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+}
 
-        .switch a:hover {
-            text-decoration: underline;
-        }
+/* Hero */
+.hero {
+  text-align: center;
+  padding: 72px 0 48px;
+}
 
-        #register-container {
-            display: none;
-        }
+.hero-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  background: var(--color-primary-dim);
+  color: var(--color-primary);
+  border: 1px solid rgba(0,168,255,0.2);
+  margin-bottom: 24px;
+  letter-spacing: 0.5px;
+}
 
-        /* 登录/注册成功蓝色提示框 */
-        #success-alert {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #007BFF;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            display: none;
-            z-index: 1000;
-        }
-    </style>
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.hero h1 .gradient {
+  background: linear-gradient(135deg, var(--color-primary), #7b8cff, var(--color-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-subtitle {
+  font-size: 1.1rem;
+  color: var(--color-text-dim);
+  max-width: 560px;
+  margin: 0 auto 40px;
+}
+
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  flex-wrap: wrap;
+}
+
+.hero-stat { text-align: center; }
+
+.hero-stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+}
+
+.hero-stat-label {
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  margin-top: 4px;
+}
+
+/* Auth Section */
+.auth-section {
+  display: flex;
+  justify-content: center;
+  padding: 0 0 64px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  overflow: hidden;
+}
+
+.tab-list {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  background: none;
+  color: var(--color-text-dim);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.tab-btn:hover { color: var(--color-text); }
+
+.tab-btn[aria-selected="true"] {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.tab-btn[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  width: 60%;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+}
+
+.tab-panel { padding: 28px 32px; }
+.tab-panel[hidden] { display: none; }
+
+.form-group { margin-bottom: 18px; }
+
+.form-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-dim);
+}
+
+.form-input.error { border-color: var(--color-error); }
+
+.form-error {
+  font-size: 0.78rem;
+  color: var(--color-error);
+  margin-top: 4px;
+  min-height: 0;
+}
+.form-error:empty { display: none; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 11px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: #fff;
+}
+.btn-primary:hover { opacity: 0.92; transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.alert {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+  display: none;
+}
+.alert.visible { display: block; }
+.alert-error { background: rgba(255,77,106,0.12); color: var(--color-error); border: 1px solid rgba(255,77,106,0.2); }
+.alert-success { background: rgba(46,204,113,0.12); color: var(--color-success); border: 1px solid rgba(46,204,113,0.2); }
+
+.spinner {
+  display: none;
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 8px;
+}
+.btn:disabled .spinner { display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Capabilities */
+.capabilities { padding: 0 0 80px; }
+
+.capabilities h2 {
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+}
+
+.capabilities-subtitle {
+  text-align: center;
+  color: var(--color-text-dim);
+  margin-bottom: 40px;
+  font-size: 0.95rem;
+}
+
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.cap-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  transition: border-color 0.2s, transform 0.2s;
+  text-align: center;
+}
+
+.cap-card:hover {
+  border-color: rgba(255,255,255,0.15);
+  transform: translateY(-2px);
+}
+
+.cap-icon {
+  width: 48px; height: 48px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  font-size: 1.4rem;
+}
+
+.cap-icon.vision  { background: rgba(0,168,255,0.15); color: var(--color-primary); }
+.cap-icon.game    { background: rgba(46,204,113,0.15); color: var(--color-success); }
+.cap-icon.api     { background: rgba(255,193,7,0.15); color: #ffc107; }
+.cap-icon.models  { background: rgba(156,39,176,0.15); color: #ce93d8; }
+
+.cap-card h3 { font-size: 1rem; margin-bottom: 8px; }
+
+.cap-card p {
+  font-size: 0.85rem;
+  color: var(--color-text-dim);
+  line-height: 1.5;
+}
+
+/* Footer */
+.footer {
+  border-top: 1px solid var(--color-border);
+  padding: 24px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  position: relative;
+  z-index: 1;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hero { padding: 48px 0 36px; }
+  .hero-stats { gap: 28px; }
+  .hero-stat-value { font-size: 1.4rem; }
+  .tab-panel { padding: 20px; }
+  .cap-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .header-inner { padding: 0 16px; }
+  .main { padding: 0 16px; }
+  .hero { padding: 36px 0 28px; }
+  .hero-stats { gap: 20px; }
+  .hero-stat-value { font-size: 1.2rem; }
+  .cap-grid { grid-template-columns: 1fr; }
+  .auth-card { max-width: 100%; }
+  .nav-links { display: none; }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); border: 0;
+}
+</style>
 </head>
-
 <body>
-    <div id="success-alert">提示信息</div>
 
-    <!-- 精美标题 -->
-    <h1 class="title">卡码五子棋</h1>
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo" aria-label="AI 推理平台首页">
+      <span class="logo-icon">&#9655;</span>
+      <span>推理平台</span>
+    </a>
+    <nav aria-label="主导航">
+      <ul class="nav-links">
+        <li><a href="#capabilities">平台能力</a></li>
+        <li><a href="/metrics">系统监控</a></li>
+        <li><a href="/menu">控制台</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
 
-    <!-- 登录界面 -->
-    <div class="container" id="login-container">
-        <h2>登录</h2>
-        <form id="login-form">
-            <div class="form-group">
-                <label for="login-username">用户名</label>
-                <input type="text" id="login-username" placeholder="请输入用户名" required>
-            </div>
-            <div class="form-group">
-                <label for="login-password">密码</label>
-                <input type="password" id="login-password" placeholder="请输入密码" required>
-            </div>
-            <button type="submit" class="btn">登录</button>
-        </form>
-        <div class="switch">
-            没有账号？<a onclick="showRegister()">去注册账号</a>
-        </div>
+<main class="main">
+
+  <section class="hero" aria-labelledby="hero-heading">
+    <span class="hero-badge">轻量级 AI 推理</span>
+    <h1 id="hero-heading">
+      <span class="gradient">部署模型</span><br>
+      交付智能
+    </h1>
+    <p class="hero-subtitle">
+      基于 C++ 构建的高性能推理平台，支持 ONNX Runtime 与 TensorRT。
+      图像分类、REST / Protobuf 双协议推理、实时监控 &mdash;
+      全部集成在单个二进制文件中。
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value">&lt;5ms</div>
+        <div class="hero-stat-label">推理延迟</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">REST</div>
+        <div class="hero-stat-label">API 协议</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">ONNX+TRT</div>
+        <div class="hero-stat-label">运行时支持</div>
+      </div>
     </div>
+  </section>
 
-    <!-- 注册界面 -->
-    <div class="container" id="register-container">
-        <h2>注册</h2>
-        <form id="register-form">
-            <div class="form-group">
-                <label for="register-username">用户名</label>
-                <input type="text" id="register-username" placeholder="请输入用户名" required>
-            </div>
-            <div class="form-group">
-                <label for="register-password">密码</label>
-                <input type="password" id="register-password" placeholder="请输入密码" required>
-            </div>
-            <button type="submit" class="btn">注册</button>
+  <section class="auth-section" aria-label="用户认证">
+    <div class="auth-card">
+      <div class="tab-list" role="tablist" aria-label="认证方式">
+        <button class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-login" id="tab-login" type="button">登录</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-register" id="tab-register" type="button">注册</button>
+      </div>
+
+      <div class="tab-panel" role="tabpanel" id="panel-login" aria-labelledby="tab-login">
+        <div id="alert-login" class="alert" role="alert"></div>
+        <form id="form-login" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="login-user">用户名</label>
+            <input class="form-input" type="text" id="login-user" name="username" autocomplete="username" required maxlength="32" aria-describedby="err-login-user">
+            <div class="form-error" id="err-login-user"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-pass">密码</label>
+            <input class="form-input" type="password" id="login-pass" name="password" autocomplete="current-password" required maxlength="64" aria-describedby="err-login-pass">
+            <div class="form-error" id="err-login-pass"></div>
+          </div>
+          <button class="btn btn-primary" type="submit">
+            <span class="spinner" aria-hidden="true"></span>
+            登录
+          </button>
         </form>
-        <div class="switch">
-            已有账号？<a onclick="showLogin()">返回登录</a>
-        </div>
+      </div>
+
+      <div class="tab-panel" role="tabpanel" id="panel-register" aria-labelledby="tab-register" hidden>
+        <div id="alert-register" class="alert" role="alert"></div>
+        <form id="form-register" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="reg-user">用户名</label>
+            <input class="form-input" type="text" id="reg-user" name="username" autocomplete="username" required minlength="3" maxlength="32" aria-describedby="err-reg-user">
+            <div class="form-error" id="err-reg-user"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-pass">密码</label>
+            <input class="form-input" type="password" id="reg-pass" name="password" autocomplete="new-password" required minlength="6" maxlength="64" aria-describedby="err-reg-pass">
+            <div class="form-error" id="err-reg-pass"></div>
+          </div>
+          <button class="btn btn-primary" type="submit">
+            <span class="spinner" aria-hidden="true"></span>
+            创建账号
+          </button>
+        </form>
+      </div>
     </div>
+  </section>
 
-    <script>
-        // 显示蓝色提示框
-        function showAlert(message) {
-            const alertBox = document.getElementById('success-alert');
-            alertBox.textContent = message;
-            alertBox.style.display = 'block';
-            setTimeout(() => {
-                alertBox.style.display = 'none';
-            }, 1000);
-        }
+  <section class="capabilities" id="capabilities" aria-labelledby="cap-heading">
+    <h2 id="cap-heading">平台能力</h2>
+    <p class="capabilities-subtitle">部署和运行 AI 模型所需的一切，开箱即用。</p>
+    <div class="cap-grid" id="cap-grid" role="list"></div>
+  </section>
 
-        // 切换注册和登录界面
-        function showRegister() {
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('register-container').style.display = 'block';
-        }
+</main>
 
-        function showLogin() {
-            document.getElementById('register-container').style.display = 'none';
-            document.getElementById('login-container').style.display = 'block';
-        }
+<footer class="footer">
+  <p>AI 推理平台 &mdash; 基于 C++, muduo, ONNX Runtime &amp; TensorRT 构建</p>
+</footer>
 
-        // 登录表单提交
-        document.getElementById('login-form').addEventListener('submit', function (e) {
-            e.preventDefault();
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
+<script>
+var CAPABILITIES = [
+  { icon: "■", cls: "vision",  title: "图像分类", desc: "ResNet-50 推理，支持 ONNX Runtime 与 TensorRT。提交 base64 或文件路径，返回 Top-5 分类结果及置信度。" },
+  { icon: "★", cls: "game",    title: "在线推理", desc: "REST / Protobuf 双协议推理 API，支持 JSON 与二进制请求，实时返回分类结果与置信度。" },
+  { icon: "⌂", cls: "api",     title: "REST &amp; Protobuf API", desc: "JSON REST 接口服务浏览器客户端，Protobuf 二进制协议支撑高吞吐内部服务，均自动文档化。" },
+  { icon: "⚙", cls: "models",  title: "模型管理", desc: "热加载 ONNX 与 TensorRT 引擎。可插拔架构 &mdash; 编辑 JSON 配置即可添加新模型，支持 CPU 与 GPU 后端。" }
+];
 
-            fetch('/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            })
-                .then(response => {
-                    // 先检查响应状态
-                    if (response.status === 403) {
-                        showAlert('账号已在其他地方登录！');
-                        throw new Error('已在其他地方登录');
-                    }
-                    
-                    // 检查其他状态和内容类型
-                    const contentType = response.headers.get('content-type');
-                    if (response.status === 200) {
-                        if (contentType && contentType.includes('application/json')) {
-                            return response.json();
-                        } else {
-                            throw new Error('返回格式错误');
-                        }
-                    } else if (response.status === 401) {
-                        showAlert('账号或密码错误！');
-                        throw new Error('认证失败');
-                    } else {
-                        throw new Error('请求失败');
-                    }
-                })
-                .then(data => {
-                    if (data && data.userId) {
-                        sessionStorage.setItem('userId', data.userId);
-                        showAlert('登录成功！');
-                        // 使用重定向而不是fetch
-                        window.location.href = '/menu';
-                    } else {
-                        throw new Error('无效的响应数据');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    if (!error.message.includes('已在其他地方登录') && 
-                        !error.message.includes('认证失败')) {
-                        showAlert('操作失败，请重试');
-                    }
-                });
-        });
+function renderCapabilities() {
+  var grid = document.getElementById("cap-grid");
+  CAPABILITIES.forEach(function(c) {
+    var card = document.createElement("div");
+    card.className = "cap-card";
+    card.setAttribute("role", "listitem");
+    card.innerHTML =
+      '<div class="cap-icon ' + c.cls + '">' + c.icon + '</div>' +
+      '<h3>' + c.title + '</h3>' +
+      '<p>' + c.desc + '</p>';
+    grid.appendChild(card);
+  });
+}
 
-        // 注册表单提交
-        document.getElementById('register-form').addEventListener('submit', function (e) {
-            e.preventDefault();
-            const username = document.getElementById('register-username').value;
-            const password = document.getElementById('register-password').value;
+/* Tab switching */
+var Tabs = {
+  current: "login",
+  switchTo: function(name) {
+    this.current = name;
+    document.querySelectorAll("[role=tab]").forEach(function(t) {
+      t.setAttribute("aria-selected", t.id === "tab-" + name ? "true" : "false");
+    });
+    document.getElementById("panel-login").hidden = (name !== "login");
+    document.getElementById("panel-register").hidden = (name !== "register");
+    if (name === "login") { document.getElementById("login-user").focus(); }
+    else { document.getElementById("reg-user").focus(); }
+  }
+};
 
-            fetch('/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            })
-                .then(response => {
-                    if (response.status === 200) {
-                        showAlert('注册成功！');
+document.getElementById("tab-login").addEventListener("click", function() { Tabs.switchTo("login"); });
+document.getElementById("tab-register").addEventListener("click", function() { Tabs.switchTo("register"); });
 
-                        // 将注册的用户名和密码填充到登录输入框
-                        document.getElementById('login-username').value = username;
-                        document.getElementById('login-password').value = password;
+/* Alerts */
+function showAlert(id, type, msg) {
+  var el = document.getElementById(id);
+  el.className = "alert alert-" + type + " visible";
+  el.textContent = msg;
+}
+function hideAlert(id) {
+  var el = document.getElementById(id);
+  el.className = "alert";
+  el.textContent = "";
+}
 
-                        setTimeout(showLogin, 1000); // 1秒后回到登录界面
-                    } else if (response.status === 409) {
-                        alert('用户名已被注册，请重新输入！');
-                    }
-                })
-                .catch(error => console.error('注册错误:', error));
-        });
+/* Form validation */
+function setFieldError(fieldId, msg) {
+  var input = document.getElementById(fieldId);
+  var err = document.getElementById("err-" + fieldId);
+  if (msg) { input.classList.add("error"); err.textContent = msg; }
+  else     { input.classList.remove("error"); err.textContent = ""; }
+}
 
-    </script>
+function validateLogin() {
+  var valid = true;
+  if (!document.getElementById("login-user").value.trim()) {
+    setFieldError("login-user", "请输入用户名"); valid = false;
+  } else { setFieldError("login-user", ""); }
+  if (!document.getElementById("login-pass").value) {
+    setFieldError("login-pass", "请输入密码"); valid = false;
+  } else { setFieldError("login-pass", ""); }
+  return valid;
+}
+
+function validateRegister() {
+  var valid = true;
+  if (document.getElementById("reg-user").value.trim().length < 3) {
+    setFieldError("reg-user", "用户名至少 3 个字符"); valid = false;
+  } else { setFieldError("reg-user", ""); }
+  if (document.getElementById("reg-pass").value.length < 6) {
+    setFieldError("reg-pass", "密码至少 6 个字符"); valid = false;
+  } else { setFieldError("reg-pass", ""); }
+  return valid;
+}
+
+/* API helpers */
+function disableForm(formId, btn) {
+  btn.disabled = true;
+  document.getElementById(formId).querySelectorAll("input").forEach(function(i) { i.disabled = true; });
+}
+
+function enableForm(formId, btn) {
+  btn.disabled = false;
+  document.getElementById(formId).querySelectorAll("input").forEach(function(i) { i.disabled = false; });
+}
+
+function handleLogin(e) {
+  e.preventDefault();
+  hideAlert("alert-login");
+  if (!validateLogin()) return;
+  var btn = document.querySelector("#form-login .btn");
+  disableForm("form-login", btn);
+
+  fetch("/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: document.getElementById("login-user").value.trim(),
+      password: document.getElementById("login-pass").value
+    })
+  }).then(function(res) {
+    if (res.ok) return res.json();
+    return res.json().then(function(d) { throw { status: res.status, message: d.message || "" }; });
+  }).then(function(data) {
+    sessionStorage.setItem("userId", data.userId);
+    window.location.href = "/menu";
+  }).catch(function(err) {
+    enableForm("form-login", btn);
+    if (err.status === 401) showAlert("alert-login", "error", "用户名或密码错误");
+    else if (err.status === 403) showAlert("alert-login", "error", "该账号已在其他地方登录");
+    else showAlert("alert-login", "error", "登录失败，请稍后重试");
+  });
+}
+
+function handleRegister(e) {
+  e.preventDefault();
+  hideAlert("alert-register");
+  if (!validateRegister()) return;
+  var btn = document.querySelector("#form-register .btn");
+  disableForm("form-register", btn);
+
+  fetch("/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: document.getElementById("reg-user").value.trim(),
+      password: document.getElementById("reg-pass").value
+    })
+  }).then(function(res) {
+    if (res.ok) return res.json();
+    return res.json().then(function(d) { throw { status: res.status, message: d.message || "" }; });
+  }).then(function() {
+    enableForm("form-register", btn);
+    showAlert("alert-register", "success", "注册成功，正在切换到登录...");
+    var regUser = document.getElementById("reg-user").value.trim();
+    document.getElementById("reg-user").value = "";
+    document.getElementById("reg-pass").value = "";
+    setTimeout(function() {
+      document.getElementById("login-user").value = regUser;
+      Tabs.switchTo("login");
+      hideAlert("alert-register");
+    }, 1000);
+  }).catch(function(err) {
+    enableForm("form-register", btn);
+    if (err.status === 409) showAlert("alert-register", "error", "用户名已存在");
+    else showAlert("alert-register", "error", "注册失败，请稍后重试");
+  });
+}
+
+document.getElementById("form-login").addEventListener("submit", handleLogin);
+document.getElementById("form-register").addEventListener("submit", handleRegister);
+
+document.addEventListener("DOMContentLoaded", function() {
+  renderCapabilities();
+  if (sessionStorage.getItem("userId")) window.location.href = "/menu";
+});
+</script>
+
 </body>
-
 </html>

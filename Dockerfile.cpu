@@ -1,0 +1,54 @@
+# ============================================
+# CPU-only production image — cloud deployment
+# Multi-stage: builds in Docker, no pre-compilation needed
+# ============================================
+
+# --- Stage 1: Build ---
+FROM ubuntu:22.04 AS builder
+
+RUN apt-get update && apt-get install -y \
+    cmake g++ make libssl-dev \
+    libmysqlclient-dev libmysqlcppconn-dev \
+    nlohmann-json3-dev protobuf-compiler libprotobuf-dev \
+    libspdlog-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /project
+WORKDIR /project/build
+RUN cmake .. -DENABLE_TENSORRT=OFF && make -j$(nproc)
+
+# --- Stage 2: Runtime ---
+FROM ubuntu:22.04
+
+# Install runtime dependencies (incl libstdc++ from builder for GLIBCXX_3.4.30)
+RUN apt-get update && apt-get install -y \
+    libmysqlcppconn7v5 libssl3 libprotobuf23 libfmt8 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy runtime libs from builder stage (matching compiler version)
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libstdc++.so.6 \
+                    /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.30 \
+                    /usr/lib/x86_64-linux-gnu/
+
+# Copy ONNX Runtime libs from build context
+COPY third_party/onnxruntime/lib/      /usr/local/lib/
+RUN ldconfig
+
+# Copy binary from builder
+COPY --from=builder /project/build/simple_server /app/simple_server
+
+# Copy ONNX model and labels
+COPY WebApps/GomokuServer/models/resnet50_classification.onnx /app/models/
+COPY WebApps/GomokuServer/models/imagenet_classes.txt        /app/models/
+
+# Copy HTML resources (handlers use relative path ../WebApps/GomokuServer/resource/)
+COPY WebApps/GomokuServer/resource/ /WebApps/GomokuServer/resource/
+
+# Copy and fix config
+COPY WebApps/GomokuServer/config.json /app/config.json
+RUN sed -i 's|/project/WebApps/GomokuServer/models/|models/|g' /app/config.json
+
+WORKDIR /app
+EXPOSE 80
+
+CMD ["./simple_server", "-c", "config.json"]

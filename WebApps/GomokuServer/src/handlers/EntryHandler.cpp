@@ -1,4 +1,5 @@
 #include "../include/handlers/EntryHandler.h"
+#include "../../../HttpServer/include/utils/FileUtil.h"
 
 void EntryHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {

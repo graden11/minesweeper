@@ -1,0 +1,21 @@
+# Build artifacts (keep only the binary)
+build/*
+!build/simple_server
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# Claude Code
+.claude/
+
+# Docs and temp files
+*.md
+cat.jpg
+
+# Scripts
+scripts/

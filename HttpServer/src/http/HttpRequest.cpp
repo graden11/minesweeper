@@ -1,4 +1,5 @@
 #include "../../include/http/HttpRequest.h"
+#include <cassert>
 
 namespace http
 {

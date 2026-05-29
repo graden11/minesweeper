@@ -2,21 +2,27 @@
 #include "../include/handlers/LoginHandler.h"
 #include "../include/handlers/RegisterHandler.h"
 #include "../include/handlers/MenuHandler.h"
-#include "../include/handlers/AiGameStartHandler.h"
 #include "../include/handlers/LogoutHandler.h"
-#include "../include/handlers/AiGameMoveHandler.h"
 #include "../include/handlers/GameBackendHandler.h"
+#include "../include/handlers/PredictHandler.h"
+#include "../include/handlers/ProtoPredictHandler.h"
+#include "../include/handlers/MetricsHandler.h"
 #include "../include/GomokuServer.h"
+#include "../include/ResNet50Engine.h"
+#ifdef ENABLE_TENSORRT
+#include "../include/ResNet50TRTEngine.h"
+#endif
+#include "../../../HttpServer/include/middleware/MetricsMiddleware.h"
+#include <fstream>
 #include "../../../HttpServer/include/http/HttpRequest.h"
 #include "../../../HttpServer/include/http/HttpResponse.h"
 #include "../../../HttpServer/include/http/HttpServer.h"
 
 using namespace http;
 
-GomokuServer::GomokuServer(int port,
-                           const std::string &name,
+GomokuServer::GomokuServer(const AppConfig &cfg,
                            muduo::net::TcpServer::Option option)
-    : httpServer_(port, name, option), maxOnline_(0)
+    : httpServer_(cfg.server.port, cfg.server.name, option), maxOnline_(0), config_(cfg)
 {
     initialize();
 }
@@ -33,99 +39,78 @@ void GomokuServer::start()
 
 void GomokuServer::initialize()
 {
-    // 初始化数据库连接池
-    http::MysqlUtil::init("tcp://127.0.0.1:3306", "root", "root", "Gomoku", 10);
-    // 初始化会话
+    http::MysqlUtil::init(config_.mysql.host,
+                          config_.mysql.user,
+                          config_.mysql.password,
+                          config_.mysql.database,
+                          config_.mysql.pool_size);
     initializeSession();
-    // 初始化中间件
     initializeMiddleware();
-    // 初始化路由
+    // 必须在initializeRouter之前，因为路由注册会用到modelFactory_
+    modelFactory_ = std::make_unique<ModelFactory>();
+    const std::string &labelsPath = config_.labels_path;
+
+    for (auto &[name, entry] : config_.models)
+    {
+#ifdef ENABLE_TENSORRT
+        if (entry.type == "tensorrt")
+        {
+            if (!std::ifstream(entry.path).good())
+            {
+                LOG_INFO << "TensorRT engine not found, skipping: " << name;
+                continue;
+            }
+            modelFactory_->registerModel(name,
+                std::make_unique<ResNet50TRTEngine>(entry.path, labelsPath));
+            continue;
+        }
+#endif
+        if (entry.type == "onnx")
+        {
+            if (!std::ifstream(entry.path).good())
+            {
+                LOG_INFO << "ONNX model not found, skipping: " << name;
+                continue;
+            }
+            modelFactory_->registerModel(name,
+                std::make_unique<ResNet50Engine>(entry.path, labelsPath));
+        }
+    }
     initializeRouter();
 }
 
 void GomokuServer::initializeSession()
 {
-    // 创建会话存储
     auto sessionStorage = std::make_unique<http::session::MemorySessionStorage>();
-    // 创建会话管理器
     auto sessionManager = std::make_unique<http::session::SessionManager>(std::move(sessionStorage));
-    // 设置会话管理器
     setSessionManager(std::move(sessionManager));
 }
 
 void GomokuServer::initializeMiddleware()
 {
-    // 创建中间件
     auto corsMiddleware = std::make_shared<http::middleware::CorsMiddleware>();
-    // 添加中间件
+    auto metricsMiddleware = std::make_shared<http::middleware::MetricsMiddleware>();
+    httpServer_.addMiddleware(metricsMiddleware);
     httpServer_.addMiddleware(corsMiddleware);
 }
 
 void GomokuServer::initializeRouter()
 {
-    // 注册url回调处理器
-    // 登录注册入口页面
     httpServer_.Get("/", std::make_shared<EntryHandler>(this));
     httpServer_.Get("/entry", std::make_shared<EntryHandler>(this));
-    // 登录
     httpServer_.Post("/login", std::make_shared<LoginHandler>(this));
-    // 注册
     httpServer_.Post("/register", std::make_shared<RegisterHandler>(this));
-    // 登出
     httpServer_.Post("/user/logout", std::make_shared<LogoutHandler>(this));
-    // 菜单页面
     httpServer_.Get("/menu", std::make_shared<MenuHandler>(this));
-    // 开始对战ai
-    httpServer_.Get("/aiBot/start", std::make_shared<AiGameStartHandler>(this));
-    // 下棋
-    httpServer_.Post("/aiBot/move", std::make_shared<AiGameMoveHandler>(this));
-    // 重新开始对战ai
-    httpServer_.Get("/aiBot/restart", 
-    [this](const http::HttpRequest& req, http::HttpResponse* resp) {
-            restartChessGameVsAi(req, resp);
-    });
 
-    // 后台界面
     httpServer_.Get("/backend", std::make_shared<GameBackendHandler>(this));
-    // 后台数据获取
     httpServer_.Get("/backend_data", [this](const http::HttpRequest& req, http::HttpResponse* resp) {
         getBackendData(req, resp);
     });
-}
 
-void GomokuServer::restartChessGameVsAi(const http::HttpRequest &req, http::HttpResponse *resp)
-{
-    // 解析请求体
-    auto session = getSessionManager()->getSession(req, resp);
-    if (session->getValue("isLoggedIn") != "true")
-    {
-        // 用户未登录，返回未授权错误
-        json errorResp;
-        errorResp["status"] = "error";
-        errorResp["message"] = "Unauthorized";
-        std::string errorBody = errorResp.dump(4);
-
-        packageResp(req.getVersion(), http::HttpResponse::k401Unauthorized,
-                    "Unauthorized", true, "application/json", errorBody.size(),
-                    errorBody, resp);
-        return;
-    }
-
-    int userId = std::stoi(session->getValue("userId"));
-    {
-        // 重新开始ai对战
-        std::lock_guard<std::mutex> lock(mutexForAiGames_);
-        if (aiGames_.find(userId) != aiGames_.end())
-            aiGames_.erase(userId);
-        aiGames_[userId] = std::make_shared<AiGame>(userId);
-    }
-
-    json successResp;
-    successResp["status"] = "ok";
-    successResp["message"] = "restart successful";
-    successResp["userId"] = userId;
-    std::string successBody = successResp.dump(4);
-    packageResp(req.getVersion(), http::HttpResponse::k200Ok, "OK", false, "application/json", successBody.size(), successBody, resp);
+    httpServer_.Post("/predict", std::make_shared<PredictHandler>(modelFactory_.get()));
+    httpServer_.Post("/predict/proto", std::make_shared<ProtoPredictHandler>(modelFactory_.get()));
+    httpServer_.Get("/metrics", std::make_shared<MetricsHandler>());
 }
 
 // 获取后台数据

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package inference;
+
+service ImageInference {
+    rpc Predict(PredictRequest) returns (PredictResponse);
+}
+
+message PredictRequest {
+    bytes  image_data = 1;
+    string model_name = 2;
+}
+
+message Prediction {
+    int32  class_id   = 1;
+    string label      = 2;
+    float  confidence = 3;
+}
+
+message PredictResponse {
+    bool                 success     = 1;
+    string               message     = 2;
+    repeated Prediction  predictions = 3;
+}

@@ -1,4 +1,5 @@
 #include "../include/handlers/MenuHandler.h"
+#include "../../../HttpServer/include/utils/FileUtil.h"
 
 void MenuHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp)
 {

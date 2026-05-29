@@ -1,0 +1,9 @@
+# 开发镜像 — 基于生产镜像，叠加编译工具链
+# 构建一次，后续只需 make + restart
+FROM kama-httpserver:latest
+
+RUN apt-get update -qq \
+    && apt-get install -y -qq cmake g++ make gdb gdbserver \
+    libssl-dev protobuf-compiler libprotobuf-dev \
+    libboost-dev libmysqlclient-dev libmysqlcppconn-dev nlohmann-json3-dev libspdlog-dev \
+    && rm -rf /var/lib/apt/lists/*

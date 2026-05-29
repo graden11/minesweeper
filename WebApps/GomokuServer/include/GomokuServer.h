@@ -7,10 +7,10 @@
 #include <mutex>
 
 
-#include "AiGame.h"
+#include "ModelFactory.h"
 #include "../../../HttpServer/include/http/HttpServer.h"
+#include "../../../HttpServer/include/utils/ConfigLoader.h"
 #include "../../../HttpServer/include/utils/MysqlUtil.h"
-#include "../../../HttpServer/include/utils/FileUtil.h"
 #include "../../../HttpServer/include/utils/JsonUtil.h"
 
 
@@ -18,21 +18,16 @@ class LoginHandler;
 class EntryHandler;
 class RegisterHandler;
 class MenuHandler;
-class AiGameStartHandler;
 class LogoutHandler;
-class AiGameMoveHandler;
 class GameBackendHandler;
+class PredictHandler;
+class ProtoPredictHandler;
 
-#define DURING_GAME 1 
-#define GAME_OVER 2
-
-#define MAX_AIBOT_NUM 4096
 
 class GomokuServer
 {
 public:
-    GomokuServer(int port,
-                 const std::string& name,
+    GomokuServer(const AppConfig &cfg,
                  muduo::net::TcpServer::Option option = muduo::net::TcpServer::kNoReusePort);
 
     void setThreadNum(int numThreads);
@@ -52,8 +47,12 @@ private:
     {
         return httpServer_.getSessionManager();
     }
+
+    ModelFactory* getModelFactory() const
+    {
+        return modelFactory_.get();
+    }
     
-    void restartChessGameVsAi(const http::HttpRequest& req, http::HttpResponse* resp);
     void getBackendData(const http::HttpRequest& req, http::HttpResponse* resp);
 
     void packageResp(const std::string& version, http::HttpResponse::HttpStatusCode statusCode,
@@ -95,28 +94,23 @@ private:
     friend class LoginHandler;
     friend class RegisterHandler;
     friend class MenuHandler;
-    friend class AiGameStartHandler;
     friend class LogoutHandler;
-    friend class AiGameMoveHandler;
     friend class GameBackendHandler;
+    friend class ProtoPredictHandler;
 
 private:
-    enum GameType
-    {
-        NO_GAME = 0,
-        MAN_VS_AI = 1,
-        MAN_VS_MAN = 2
-    };
-    // 实际业务制定由GomokuServer来完成
-    // 需要留意httpServer_提供哪些接口供使用
     http::HttpServer                                 httpServer_;
     http::MysqlUtil                                  mysqlUtil_;
-    // userId -> AiBot
-    std::unordered_map<int, std::shared_ptr<AiGame>> aiGames_;
-    std::mutex                                       mutexForAiGames_;
-    // userId -> 是否在游戏中
+    // userId -> 是否在线
     std::unordered_map<int, bool>                    onlineUsers_;
-    std::mutex                                       mutexForOnlineUsers_; 
+    std::mutex                                       mutexForOnlineUsers_;
+    // userId -> sessionId（踢人下线用）
+    std::unordered_map<int, std::string>             loginSessions_;
+    std::mutex                                       mutexForLoginSessions_;
     // 最高在线人数
     std::atomic<int>                                 maxOnline_;
+    // 模型工厂
+    std::unique_ptr<ModelFactory>                    modelFactory_;
+    // 应用配置
+    AppConfig                                        config_;
 };
