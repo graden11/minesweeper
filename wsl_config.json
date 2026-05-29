@@ -13,15 +13,15 @@
     "host": "tcp://127.0.0.1:3306",
     "user": "root",
     "password": "root",
-    "database": "Gomoku",
+    "database": "inference_platform",
     "pool_size": 10
   },
   "models": {
-    "labels_path": "/mnt/d/jetbrains/clion-project/httpserver/WebApps/GomokuServer/models/imagenet_classes.txt",
+    "labels_path": "/mnt/d/jetbrains/clion-project/httpserver/WebApps/InferenceServer/models/imagenet_classes.txt",
     "engines": {
       "resnet50": {
         "type": "onnx",
-        "path": "/mnt/d/jetbrains/clion-project/httpserver/WebApps/GomokuServer/models/resnet50_classification.onnx"
+        "path": "/mnt/d/jetbrains/clion-project/httpserver/WebApps/InferenceServer/models/resnet50_classification.onnx"
       }
     }
   }

@@ -7,7 +7,7 @@ cmake-build-*/
 .vscode/
 
 # Model files (large binaries)
-WebApps/GomokuServer/models/
+WebApps/InferenceServer/models/
 
 # Backup files
 *.bak

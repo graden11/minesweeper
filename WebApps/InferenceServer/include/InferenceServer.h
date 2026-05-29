@@ -24,10 +24,10 @@ class PredictHandler;
 class ProtoPredictHandler;
 
 
-class GomokuServer
+class InferenceServer
 {
 public:
-    GomokuServer(const AppConfig &cfg,
+    InferenceServer(const AppConfig &cfg,
                  muduo::net::TcpServer::Option option = muduo::net::TcpServer::kNoReusePort);
 
     void setThreadNum(int numThreads);

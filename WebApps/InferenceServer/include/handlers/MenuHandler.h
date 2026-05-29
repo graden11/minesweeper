@@ -1,15 +1,15 @@
 #pragma once
 
 #include "../../../HttpServer/include/router/RouterHandler.h"
-#include "../GomokuServer.h"
+#include "../InferenceServer.h"
 
 
 class MenuHandler : public http::router::RouterHandler
 {
 public:
-    explicit MenuHandler(GomokuServer* server) : server_(server) {}
+    explicit MenuHandler(InferenceServer* server) : server_(server) {}
 
     void handle(const http::HttpRequest& req, http::HttpResponse* resp) override;
 private:
-    GomokuServer* server_;
+    InferenceServer* server_;
 };

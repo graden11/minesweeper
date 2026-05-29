@@ -21,13 +21,19 @@ struct MysqlConfig {
     std::string host = "tcp://mysql:3306";
     std::string user = "root";
     std::string password = "root";
-    std::string database = "Gomoku";
+    std::string database = "inference_platform";
     int pool_size = 10;
 };
 
 struct ModelEntryConfig {
     std::string type;   // "onnx" or "tensorrt"
     std::string path;
+};
+
+struct RedisConfig {
+    std::string host;   // 空 = 使用内存模式
+    int port = 6379;
+    int pool_size = 5;
 };
 
 struct LoggingConfig {
@@ -38,6 +44,7 @@ struct LoggingConfig {
 struct AppConfig {
     ServerConfig server;
     MysqlConfig mysql;
+    RedisConfig redis;
     LoggingConfig logging;
     std::string labels_path;
     std::unordered_map<std::string, ModelEntryConfig> models;
@@ -90,6 +97,15 @@ inline AppConfig loadConfig(const std::string &filePath)
         if (m.contains("password"))  cfg.mysql.password  = m["password"].get<std::string>();
         if (m.contains("database"))  cfg.mysql.database  = m["database"].get<std::string>();
         if (m.contains("pool_size")) cfg.mysql.pool_size = m["pool_size"].get<int>();
+    }
+
+    // Redis
+    if (j.contains("redis"))
+    {
+        auto &r = j["redis"];
+        if (r.contains("host"))      cfg.redis.host      = r["host"].get<std::string>();
+        if (r.contains("port"))      cfg.redis.port      = r["port"].get<int>();
+        if (r.contains("pool_size")) cfg.redis.pool_size = r["pool_size"].get<int>();
     }
 
     // Models

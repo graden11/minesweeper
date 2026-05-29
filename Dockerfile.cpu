@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     cmake g++ make libssl-dev \
     libmysqlclient-dev libmysqlcppconn-dev \
     nlohmann-json3-dev protobuf-compiler libprotobuf-dev \
-    libspdlog-dev \
+    libspdlog-dev libhiredis-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . /project
@@ -22,7 +22,7 @@ FROM ubuntu:22.04
 
 # Install runtime dependencies (incl libstdc++ from builder for GLIBCXX_3.4.30)
 RUN apt-get update && apt-get install -y \
-    libmysqlcppconn7v5 libssl3 libprotobuf23 libfmt8 \
+    libmysqlcppconn7v5 libssl3 libprotobuf23 libfmt8 libhiredis0.14 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy runtime libs from builder stage (matching compiler version)
@@ -38,15 +38,15 @@ RUN ldconfig
 COPY --from=builder /project/build/simple_server /app/simple_server
 
 # Copy ONNX model and labels
-COPY WebApps/GomokuServer/models/resnet50_classification.onnx /app/models/
-COPY WebApps/GomokuServer/models/imagenet_classes.txt        /app/models/
+COPY WebApps/InferenceServer/models/resnet50_classification.onnx /app/models/
+COPY WebApps/InferenceServer/models/imagenet_classes.txt        /app/models/
 
-# Copy HTML resources (handlers use relative path ../WebApps/GomokuServer/resource/)
-COPY WebApps/GomokuServer/resource/ /WebApps/GomokuServer/resource/
+# Copy HTML resources (handlers use relative path ../WebApps/InferenceServer/resource/)
+COPY WebApps/InferenceServer/resource/ /WebApps/InferenceServer/resource/
 
 # Copy and fix config
-COPY WebApps/GomokuServer/config.json /app/config.json
-RUN sed -i 's|/project/WebApps/GomokuServer/models/|models/|g' /app/config.json
+COPY WebApps/InferenceServer/config.json /app/config.json
+RUN sed -i 's|/project/WebApps/InferenceServer/models/|models/|g' /app/config.json
 
 WORKDIR /app
 EXPOSE 80

@@ -1,4 +1,5 @@
 #include "../include/handlers/RegisterHandler.h"
+#include "../../../../third_party/bcrypt.h"
 
 void RegisterHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
@@ -12,8 +13,7 @@ void RegisterHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
     if (userId != -1)
     {
         // 插入成功
-        // 封装成功响应
-        json successResp;   
+        json successResp;
         successResp["status"] = "success";
         successResp["message"] = "Register successful";
         successResp["userId"] = userId;
@@ -43,14 +43,14 @@ void RegisterHandler::handle(const http::HttpRequest& req, http::HttpResponse* r
 
 int RegisterHandler::insertUser(const std::string &username, const std::string &password)
 {
-    // 判断用户是否存在，如果存在则返回-1，否则返回用户id
     if (!isUserExist(username))
     {
-        // 用户不存在，插入用户
-        std::string sql = "INSERT INTO users (username, password) VALUES ('" + username + "', '" + password + "')";
-        mysqlUtil_.executeUpdate(sql);
-        std::string sql2 = "SELECT id FROM users WHERE username = '" + username + "'";
-        sql::ResultSet* res = mysqlUtil_.executeQuery(sql2);
+        std::string hash = bcrypt::generateHash(password, 12);
+        mysqlUtil_.executeUpdate(
+            "INSERT INTO users (username, password) VALUES (?, ?)", username, hash);
+
+        sql::ResultSet* res = mysqlUtil_.executeQuery(
+            "SELECT id FROM users WHERE username = ?", username);
         if (res->next())
         {
             return res->getInt("id");
@@ -61,8 +61,8 @@ int RegisterHandler::insertUser(const std::string &username, const std::string &
 
 bool RegisterHandler::isUserExist(const std::string &username)
 {
-    std::string sql = "SELECT id FROM users WHERE username = '" + username + "'";
-    sql::ResultSet* res = mysqlUtil_.executeQuery(sql);
+    sql::ResultSet* res = mysqlUtil_.executeQuery(
+        "SELECT id FROM users WHERE username = ?", username);
     if (res->next())
     {
         return true;

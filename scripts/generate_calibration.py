@@ -71,8 +71,8 @@ def augment_image(img, out_dir, base_name, count_start):
 
 
 def main():
-    src = sys.argv[1] if len(sys.argv) > 1 else "WebApps/GomokuServer/models/cat.jpg"
-    out_dir = sys.argv[2] if len(sys.argv) > 2 else "WebApps/GomokuServer/models/calibration"
+    src = sys.argv[1] if len(sys.argv) > 1 else "WebApps/InferenceServer/models/cat.jpg"
+    out_dir = sys.argv[2] if len(sys.argv) > 2 else "WebApps/InferenceServer/models/calibration"
 
     os.makedirs(out_dir, exist_ok=True)
 

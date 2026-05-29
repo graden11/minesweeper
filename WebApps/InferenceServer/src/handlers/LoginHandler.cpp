@@ -1,4 +1,5 @@
 #include "../include/handlers/LoginHandler.h"
+#include "../../../../third_party/bcrypt.h"
 
 void LoginHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp)
 {
@@ -104,17 +105,17 @@ void LoginHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp
 
 int LoginHandler::queryUserId(const std::string &username, const std::string &password)
 {
-    // 前端用户传来账号密码，查找数据库是否有该账号密码
-    // 使用预处理语句, 防止sql注入
-    std::string sql = "SELECT id FROM users WHERE username = ? AND password = ?";
-    // std::vector<std::string> params = {username, password};
-    sql::ResultSet* res = mysqlUtil_.executeQuery(sql, username, password);
+    sql::ResultSet* res = mysqlUtil_.executeQuery(
+        "SELECT id, password FROM users WHERE username = ?", username);
     if (res->next())
     {
         int id = res->getInt("id");
-        return id;
+        std::string hash = res->getString("password");
+        if (bcrypt::validatePassword(password, hash))
+        {
+            return id;
+        }
     }
-    // 如果查询结果为空，则返回-1
     return -1;
 }
 

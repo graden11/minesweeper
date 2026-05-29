@@ -4,7 +4,7 @@
 #include <muduo/base/Logging.h>
 #include <muduo/net/EventLoop.h>
 
-#include "GomokuServer.h"
+#include "InferenceServer.h"
 #include "../../../HttpServer/include/utils/ConfigLoader.h"
 #include "../../../HttpServer/include/utils/LogUtil.h"
 
@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
   else
     muduo::Logger::setLogLevel(muduo::Logger::WARN);
 
-  GomokuServer server(cfg);
+  InferenceServer server(cfg);
   server.setThreadNum(cfg.server.threads);
   server.start();
 }

@@ -6,7 +6,7 @@
 
 ```
 +-------------------------------------------+
-|  应用层: GomokuServer                      |  9 个 Handler、用户认证、ML 推理、监控
+|  应用层: InferenceServer                      |  9 个 Handler、用户认证、ML 推理、监控
 +-------------------------------------------+
 |  框架层: HttpServer                        |  路由、中间件、会话、SSL、DB 连接池
 +-------------------------------------------+
@@ -111,13 +111,13 @@
 
 ---
 
-## 第六阶段：应用层 — GomokuServer 组装（3天）
+## 第六阶段：应用层 — InferenceServer 组装（3天）
 
 **目标**: 理解框架如何被使用、所有 Handler 的协作关系
 
 **核心文件**:
-- `WebApps/GomokuServer/src/GomokuServer.cpp` — `initialize()` 组装全流程
-- `WebApps/GomokuServer/include/GomokuServer.h` — 应用状态管理
+- `WebApps/InferenceServer/src/InferenceServer.cpp` — `initialize()` 组装全流程
+- `WebApps/InferenceServer/include/InferenceServer.h` — 应用状态管理
 
 ### 6.1 认证流程（登录/注册/登出）
 
@@ -140,7 +140,7 @@
 | `MetricsHandler` | `/metrics` | GET | 导出推理延迟统计 |
 
 **学习要点**:
-- `friend class` 的用法 — Handler 直接访问 GomokuServer 私有成员
+- `friend class` 的用法 — Handler 直接访问 InferenceServer 私有成员
 - `ModelFactory` 注册表模式按名称获取引擎
 - mutex 粒度：`mutexForOnlineUsers_` / `mutexForLoginSessions_`
 
@@ -151,10 +151,10 @@
 **目标**: 理解 ONNX Runtime 和 TensorRT 的集成方式
 
 **核心文件**:
-- `WebApps/GomokuServer/include/InferenceEngine.h` — 策略接口
-- `WebApps/GomokuServer/src/ResNet50Engine.cpp` — CPU 推理完整流水线
-- `WebApps/GomokuServer/src/ResNet50TRTEngine.cpp` — GPU 双缓冲异步推理
-- `WebApps/GomokuServer/src/ModelFactory.cpp` — 注册表模式
+- `WebApps/InferenceServer/include/InferenceEngine.h` — 策略接口
+- `WebApps/InferenceServer/src/ResNet50Engine.cpp` — CPU 推理完整流水线
+- `WebApps/InferenceServer/src/ResNet50TRTEngine.cpp` — GPU 双缓冲异步推理
+- `WebApps/InferenceServer/src/ModelFactory.cpp` — 注册表模式
 
 **学习要点**:
 1. 图像预处理：stb_image 解码 → 224×224 resize → HWC→CHW → 标准化

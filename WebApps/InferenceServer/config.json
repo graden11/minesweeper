@@ -9,27 +9,32 @@
     "level": "INFO",
     "file": "server.log"
   },
+  "redis": {
+    "host": "redis",
+    "port": 6379,
+    "pool_size": 5
+  },
   "mysql": {
     "host": "tcp://mysql:3306",
     "user": "root",
     "password": "root",
-    "database": "Gomoku",
+    "database": "inference_platform",
     "pool_size": 10
   },
   "models": {
-    "labels_path": "/project/WebApps/GomokuServer/models/imagenet_classes.txt",
+    "labels_path": "/project/WebApps/InferenceServer/models/imagenet_classes.txt",
     "engines": {
       "resnet50": {
         "type": "onnx",
-        "path": "/project/WebApps/GomokuServer/models/resnet50_classification.onnx"
+        "path": "/project/WebApps/InferenceServer/models/resnet50_classification.onnx"
       },
       "resnet50_trt": {
         "type": "tensorrt",
-        "path": "/project/WebApps/GomokuServer/models/resnet50_classification.engine"
+        "path": "/project/WebApps/InferenceServer/models/resnet50_classification.engine"
       },
       "resnet50_int8": {
         "type": "tensorrt",
-        "path": "/project/WebApps/GomokuServer/models/resnet50_int8.engine"
+        "path": "/project/WebApps/InferenceServer/models/resnet50_int8.engine"
       }
     }
   }

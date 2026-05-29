@@ -4,7 +4,7 @@ services:
     container_name: kama-mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: Gomoku
+      MYSQL_DATABASE: inference_platform
     ports:
       - "3306:3306"
     volumes:
@@ -15,6 +15,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: kama-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   httpserver:
     build:
@@ -27,6 +40,9 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   mysql_data:
+  redis_data:

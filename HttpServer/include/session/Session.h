@@ -33,6 +33,7 @@ public:
     // 数据存取
     void setValue(const std::string&key, const std::string&value);
     std::string getValue(const std::string&key) const;
+    const std::unordered_map<std::string, std::string>& getData() const { return data_; }
     void remove(const std::string&key);
     void clear();
 private:

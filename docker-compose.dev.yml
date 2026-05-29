@@ -8,7 +8,7 @@ services:
     container_name: kama-mysql-dev
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: Gomoku
+      MYSQL_DATABASE: inference_platform
     ports:
       - "3306:3306"
     volumes:
@@ -19,6 +19,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: kama-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   httpserver:
     build:
@@ -34,6 +47,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     cap_add:
       - SYS_PTRACE
     security_opt:
@@ -44,7 +59,7 @@ services:
       cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_TENSORRT=OFF 2>/dev/null || true;
       make -j$$(nproc);
       echo '=== Build OK, starting ===';
-      ./simple_server -c /project/WebApps/GomokuServer/config.json"
+      ./simple_server -c /project/WebApps/InferenceServer/config.json"
     deploy:
       resources:
         reservations:
@@ -55,3 +70,4 @@ services:
 
 volumes:
   mysql_data_dev:
+  redis_data_dev:

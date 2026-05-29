@@ -7,12 +7,14 @@
 #include "../include/handlers/PredictHandler.h"
 #include "../include/handlers/ProtoPredictHandler.h"
 #include "../include/handlers/MetricsHandler.h"
-#include "../include/GomokuServer.h"
+#include "../include/InferenceServer.h"
 #include "../include/ResNet50Engine.h"
 #ifdef ENABLE_TENSORRT
 #include "../include/ResNet50TRTEngine.h"
 #endif
 #include "../../../HttpServer/include/middleware/MetricsMiddleware.h"
+#include "../../../HttpServer/include/session/MemorySessionStorage.h"
+#include "../../../HttpServer/include/session/RedisSessionStorage.h"
 #include <fstream>
 #include "../../../HttpServer/include/http/HttpRequest.h"
 #include "../../../HttpServer/include/http/HttpResponse.h"
@@ -20,24 +22,24 @@
 
 using namespace http;
 
-GomokuServer::GomokuServer(const AppConfig &cfg,
+InferenceServer::InferenceServer(const AppConfig &cfg,
                            muduo::net::TcpServer::Option option)
     : httpServer_(cfg.server.port, cfg.server.name, option), maxOnline_(0), config_(cfg)
 {
     initialize();
 }
 
-void GomokuServer::setThreadNum(int numThreads)
+void InferenceServer::setThreadNum(int numThreads)
 {
     httpServer_.setThreadNum(numThreads);
 }
 
-void GomokuServer::start()
+void InferenceServer::start()
 {
     httpServer_.start();
 }
 
-void GomokuServer::initialize()
+void InferenceServer::initialize()
 {
     http::MysqlUtil::init(config_.mysql.host,
                           config_.mysql.user,
@@ -79,14 +81,20 @@ void GomokuServer::initialize()
     initializeRouter();
 }
 
-void GomokuServer::initializeSession()
+void InferenceServer::initializeSession()
 {
-    auto sessionStorage = std::make_unique<http::session::MemorySessionStorage>();
-    auto sessionManager = std::make_unique<http::session::SessionManager>(std::move(sessionStorage));
+    std::unique_ptr<http::session::SessionStorage> storage;
+    if (config_.redis.host.empty()) {
+        storage = std::make_unique<http::session::MemorySessionStorage>();
+    } else {
+        storage = std::make_unique<http::session::RedisSessionStorage>(
+            config_.redis.host, config_.redis.port);
+    }
+    auto sessionManager = std::make_unique<http::session::SessionManager>(std::move(storage));
     setSessionManager(std::move(sessionManager));
 }
 
-void GomokuServer::initializeMiddleware()
+void InferenceServer::initializeMiddleware()
 {
     auto corsMiddleware = std::make_shared<http::middleware::CorsMiddleware>();
     auto metricsMiddleware = std::make_shared<http::middleware::MetricsMiddleware>();
@@ -94,7 +102,7 @@ void GomokuServer::initializeMiddleware()
     httpServer_.addMiddleware(corsMiddleware);
 }
 
-void GomokuServer::initializeRouter()
+void InferenceServer::initializeRouter()
 {
     httpServer_.Get("/", std::make_shared<EntryHandler>(this));
     httpServer_.Get("/entry", std::make_shared<EntryHandler>(this));
@@ -114,7 +122,7 @@ void GomokuServer::initializeRouter()
 }
 
 // 获取后台数据
-void GomokuServer::getBackendData(const http::HttpRequest &req, http::HttpResponse *resp)
+void InferenceServer::getBackendData(const http::HttpRequest &req, http::HttpResponse *resp)
 {
     try 
     {
@@ -168,7 +176,7 @@ void GomokuServer::getBackendData(const http::HttpRequest &req, http::HttpRespon
     }
 }
 
-void GomokuServer::packageResp(const std::string &version,
+void InferenceServer::packageResp(const std::string &version,
                              http::HttpResponse::HttpStatusCode statusCode,
                              const std::string &statusMsg,
                              bool close,

@@ -16,7 +16,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/HttpServer/include
-    ${PROJECT_SOURCE_DIR}/WebApps/GomokuServer/include
+    ${PROJECT_SOURCE_DIR}/WebApps/InferenceServer/include
     /usr/include/mysql-cppconn-8
     /usr/include/mysql
     ${PROJECT_SOURCE_DIR}/third_party/onnxruntime/include
@@ -35,6 +35,11 @@ endif()
 # 查找必要的库
 find_library(MYSQLCPPCONN_LIBRARY
     NAMES mysqlcppconn mysqlcppconn8
+    PATHS /usr/lib /usr/lib64 /usr/local/lib
+)
+
+find_library(HIREDIS_LIBRARY
+    NAMES hiredis
     PATHS /usr/lib /usr/lib64 /usr/local/lib
 )
 
@@ -59,27 +64,27 @@ file(GLOB_RECURSE HTTP_SERVER_SRC
     "${PROJECT_SOURCE_DIR}/HttpServer/src/*.cpp"
 )
 
-file(GLOB_RECURSE GOMOKU_SERVER_SRC
+file(GLOB_RECURSE INFERENCE_SERVER_SRC
     CONFIGURE_DEPENDS
-    "${PROJECT_SOURCE_DIR}/WebApps/GomokuServer/src/*.cpp"
+    "${PROJECT_SOURCE_DIR}/WebApps/InferenceServer/src/*.cpp"
 )
 
 if(NOT ENABLE_TENSORRT)
-    list(FILTER GOMOKU_SERVER_SRC EXCLUDE REGEX "ResNet50TRTEngine\\.cpp")
+    list(FILTER INFERENCE_SERVER_SRC EXCLUDE REGEX "ResNet50TRTEngine\\.cpp")
 endif()
 
 # 添加主程序文件
-set(MAIN_SRC "${PROJECT_SOURCE_DIR}/WebApps/GomokuServer/src/main.cpp")
+set(MAIN_SRC "${PROJECT_SOURCE_DIR}/WebApps/InferenceServer/src/main.cpp")
 
 # 如果主程序文件不存在，创建一个
 if(NOT EXISTS ${MAIN_SRC})
     file(WRITE ${MAIN_SRC}
-"#include \"../include/GomokuServer.h\"
+"#include \"../include/InferenceServer.h\"
 #include <iostream>
 
 int main(int argc, char* argv[]) {
     try {
-        GomokuServer server;
+        InferenceServer server;
         server.start();
         return 0;
     } catch (const std::exception& e) {
@@ -94,7 +99,7 @@ endif()
 add_executable(simple_server
     ${MAIN_SRC}
     ${HTTP_SERVER_SRC}
-    ${GOMOKU_SERVER_SRC}
+    ${INFERENCE_SERVER_SRC}
     ${GENERATED_DIR}/inference.pb.cc
 )
 
@@ -107,6 +112,8 @@ target_link_libraries(simple_server
     mysqlclient
     ssl
     crypto
+    crypt
+    ${HIREDIS_LIBRARY}
     protobuf
     ${PROJECT_SOURCE_DIR}/third_party/onnxruntime/lib/libonnxruntime.so
     /usr/lib/x86_64-linux-gnu/libfmt.so
@@ -128,4 +135,4 @@ endforeach()
 
 message(STATUS "Main source file: ${MAIN_SRC}")
 message(STATUS "HTTP Server sources: ${HTTP_SERVER_SRC}")
-message(STATUS "Gomoku Server sources: ${GOMOKU_SERVER_SRC}")
+message(STATUS "Inference Server sources: ${INFERENCE_SERVER_SRC}")
