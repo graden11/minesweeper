@@ -68,7 +68,9 @@ COPY --from=builder /project/build/simple_server /app/simple_server
 COPY models/ /app/models/
 COPY WebApps/InferenceServer/resource/ /WebApps/InferenceServer/resource/
 COPY WebApps/InferenceServer/config.json /app/config.json
-RUN sed -i 's|/project/WebApps/InferenceServer/models/|models/|g' /app/config.json
+# Fix model paths — they point to ../WebApps/InferenceServer/models/ in the source config,
+# inside container they are at /app/models/
+RUN sed -i 's|../WebApps/InferenceServer/models/|models/|g; s|/project/WebApps/InferenceServer/models/|models/|g' /app/config.json
 
 COPY docker-entrypoint.sh /app/
 RUN chmod +x /app/docker-entrypoint.sh

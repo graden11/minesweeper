@@ -30,6 +30,27 @@ struct ModelEntryConfig {
     std::string type;    // "onnx" or "tensorrt"
     std::string version; // 为空时默认 "1"
     std::string path;
+
+    // --- Extended fields (all optional, ImageNet defaults) ---
+    std::string task;              // "classification" (default)
+    std::string labels;            // per-model labels path; empty = use global fallback
+    int top_k = 5;
+
+    // Input
+    std::string input_name = "input";
+    int input_width  = 224;
+    int input_height = 224;
+    int input_channels = 3;
+    std::vector<float> input_mean = {0.485f, 0.456f, 0.406f};
+    std::vector<float> input_std  = {0.229f, 0.224f, 0.225f};
+
+    // Output
+    std::string output_name = "output";
+
+    // Detection / Segmentation
+    float confidence_threshold = 0.5f;
+    float nms_threshold = 0.45f;
+    int   max_detections = 100;
 };
 
 struct DynamicModelEntry {
@@ -37,6 +58,21 @@ struct DynamicModelEntry {
     std::string version;
     std::string type;
     std::string path;
+    std::string task;
+    std::string labels;
+    int top_k = 5;
+    int input_width = 224;
+    int input_height = 224;
+    int input_channels = 3;
+    std::string input_name = "input";
+    std::string output_name = "output";
+    std::vector<float> input_mean = {0.485f, 0.456f, 0.406f};
+    std::vector<float> input_std  = {0.229f, 0.224f, 0.225f};
+
+    // Detection
+    float confidence_threshold = 0.5f;
+    float nms_threshold = 0.45f;
+    int   max_detections = 100;
 };
 
 struct RedisConfig {
@@ -132,17 +168,57 @@ inline AppConfig loadConfig(const std::string &filePath)
     if (j.contains("models"))
     {
         auto &m = j["models"];
+        // Support both old "labels_path" and new "global_labels_path"
         if (m.contains("labels_path"))
             cfg.labels_path = m["labels_path"].get<std::string>();
+        else if (m.contains("global_labels_path"))
+            cfg.labels_path = m["global_labels_path"].get<std::string>();
 
         if (m.contains("engines"))
         {
             for (auto &[name, entry] : m["engines"].items())
             {
                 ModelEntryConfig mec;
-                mec.type = entry.value("type", "onnx");
+                mec.type    = entry.value("type", "onnx");
                 mec.version = entry.value("version", "");
-                mec.path = entry.value("path", "");
+                mec.path    = entry.value("path", "");
+
+                // Extended fields (optional, ImageNet defaults)
+                mec.task     = entry.value("task", "classification");
+                mec.labels   = entry.value("labels", "");
+                mec.top_k    = entry.value("top_k", 5);
+                mec.input_name     = entry.value("input_name", "input");
+                mec.output_name    = entry.value("output_name", "output");
+                mec.input_width    = entry.value("input_width", 224);
+                mec.input_height   = entry.value("input_height", 224);
+                mec.input_channels = entry.value("input_channels", 3);
+
+                if (entry.contains("input"))
+                {
+                    auto &in = entry["input"];
+                    mec.input_name     = in.value("name", "input");
+                    mec.input_width    = in.value("width", 224);
+                    mec.input_height   = in.value("height", 224);
+                    mec.input_channels = in.value("channels", 3);
+                    if (in.contains("mean"))
+                    {
+                        mec.input_mean.clear();
+                        for (auto &v : in["mean"])
+                            mec.input_mean.push_back(v.get<float>());
+                    }
+                    if (in.contains("std"))
+                    {
+                        mec.input_std.clear();
+                        for (auto &v : in["std"])
+                            mec.input_std.push_back(v.get<float>());
+                    }
+                }
+                if (entry.contains("output"))
+                {
+                    auto &out = entry["output"];
+                    mec.output_name = out.value("name", "output");
+                }
+
                 cfg.models[name] = mec;
             }
         }
@@ -163,10 +239,30 @@ inline AppConfig loadConfig(const std::string &filePath)
         for (auto &entry : j["dynamic_engines"])
         {
             DynamicModelEntry dme;
-            dme.name = entry.value("name", "");
+            dme.name    = entry.value("name", "");
             dme.version = entry.value("version", "");
-            dme.type = entry.value("type", "");
-            dme.path = entry.value("path", "");
+            dme.type    = entry.value("type", "");
+            dme.path    = entry.value("path", "");
+            dme.task    = entry.value("task", "classification");
+            dme.labels  = entry.value("labels", "");
+            dme.top_k   = entry.value("top_k", 5);
+            dme.input_name     = entry.value("input_name", "input");
+            dme.output_name    = entry.value("output_name", "output");
+            dme.input_width    = entry.value("input_width", 224);
+            dme.input_height   = entry.value("input_height", 224);
+            dme.input_channels = entry.value("input_channels", 3);
+            if (entry.contains("input_mean"))
+            {
+                dme.input_mean.clear();
+                for (auto &v : entry["input_mean"])
+                    dme.input_mean.push_back(v.get<float>());
+            }
+            if (entry.contains("input_std"))
+            {
+                dme.input_std.clear();
+                for (auto &v : entry["input_std"])
+                    dme.input_std.push_back(v.get<float>());
+            }
             if (!dme.name.empty() && !dme.path.empty())
                 cfg.dynamic_engines.push_back(dme);
         }

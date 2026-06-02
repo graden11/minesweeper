@@ -4,6 +4,8 @@
 
 #include <muduo/base/Logging.h>
 
+#include "../../../../HttpServer/include/utils/JsonUtil.h"
+
 #include <fstream>
 #include <vector>
 

@@ -15,10 +15,10 @@
 #include "../include/handlers/ReadyHandler.h"
 #include "../include/InferenceServer.h"
 #include "../include/RequestBatcher.h"
-#include "../include/ResNet50Engine.h"
-#ifdef ENABLE_TENSORRT
-#include "../include/ResNet50TRTEngine.h"
-#endif
+#include "../include/ModelPipeline.h"
+#include "../include/BackendRegistry.h"
+#include "../include/Preprocessor.h"
+#include "../include/Postprocessor.h"
 #include "../../../HttpServer/include/middleware/MetricsMiddleware.h"
 #include "../../../HttpServer/include/utils/MetricsCollector.h"
 #include "../../../HttpServer/include/session/SessionStorage.h"
@@ -97,34 +97,80 @@ void InferenceServer::initialize()
 
     int batchSize = config_.batching.enabled ? config_.batching.max_batch_size : 1;
 
-    auto loadEngine = [&](const std::string& name, const std::string& version,
-                           const std::string& type, const std::string& path) {
-        if (type == "tensorrt") {
-#ifdef ENABLE_TENSORRT
-            modelFactory_->registerModel(name, version,
-                std::make_shared<ResNet50TRTEngine>(path, labelsPath, batchSize), type, path);
-#else
-            spdlog::warn("TensorRT support disabled, skipping: {}", name);
-#endif
-        } else if (type == "onnx") {
-            if (!std::ifstream(path).good()) {
-                spdlog::warn("ONNX model not found, skipping: {}:{}", name, version);
-                return;
-            }
-            modelFactory_->registerModel(name, version,
-                std::make_shared<ResNet50Engine>(path, labelsPath, batchSize), type, path);
+    auto loadModel = [&](const std::string& name, const std::string& version,
+                           const std::string& type, const std::string& path,
+                           const std::string& taskStr = "classification",
+                           const std::string& perModelLabels = "",
+                           int topK = 5,
+                           int inputW = 224, int inputH = 224, int inputC = 3,
+                           const std::string& inputName = "input",
+                           const std::string& outputName = "output",
+                           const std::vector<float>& inputMean = {0.485f, 0.456f, 0.406f},
+                           const std::vector<float>& inputStd = {0.229f, 0.224f, 0.225f}) {
+
+        if (!inference::BackendRegistry::instance().has(type)) {
+            spdlog::warn("Backend '{}' not available, skipping: {}", type, name);
+            return;
         }
+
+        std::string effectiveLabels = perModelLabels.empty() ? labelsPath : perModelLabels;
+
+        // Build ModelConfig from all parameters
+        inference::ModelConfig cfg;
+        cfg.name    = name;
+        cfg.version = version.empty() ? "1" : version;
+        cfg.type    = type;
+        cfg.path    = path;
+        cfg.task    = inference::parseTaskType(taskStr);
+        cfg.labels_path = effectiveLabels;
+        cfg.top_k   = topK;
+        cfg.max_batch_size = batchSize;
+        cfg.input.name   = inputName;
+        cfg.input.preferred_width  = inputW;
+        cfg.input.preferred_height = inputH;
+        cfg.input.channels         = inputC;
+        cfg.input.mean = inputMean;
+        cfg.input.std  = inputStd;
+        cfg.output.name = outputName;
+
+        if (!std::ifstream(path).good() && type == "onnx") {
+            spdlog::warn("ONNX model not found, skipping: {}:{}", name, version);
+            return;
+        }
+
+        auto backend = inference::BackendRegistry::instance().create(type, cfg);
+        if (!backend) {
+            spdlog::warn("Failed to create backend '{}' for: {}", type, name);
+            return;
+        }
+
+        auto preprocessor  = inference::createPreprocessor(cfg);
+        auto postprocessor = inference::createPostprocessor(cfg);
+
+        auto pipeline = std::make_shared<inference::ModelPipeline>(
+            std::move(cfg), std::move(preprocessor),
+            std::move(backend), std::move(postprocessor));
+
+        modelFactory_->registerModel(name, version, pipeline, type, path);
     };
 
     // Load static models from config
     for (auto &[name, entry] : config_.models) {
         std::string version = entry.version.empty() ? "1" : entry.version;
-        loadEngine(name, version, entry.type, entry.path);
+        loadModel(name, version, entry.type, entry.path,
+                  entry.task, entry.labels, entry.top_k,
+                  entry.input_width, entry.input_height, entry.input_channels,
+                  entry.input_name, entry.output_name,
+                  entry.input_mean, entry.input_std);
     }
 
     // Load dynamic models from config (persisted by /models/load API)
     for (auto& entry : config_.dynamic_engines) {
-        loadEngine(entry.name, entry.version, entry.type, entry.path);
+        loadModel(entry.name, entry.version, entry.type, entry.path,
+                  entry.task, entry.labels, entry.top_k,
+                  entry.input_width, entry.input_height, entry.input_channels,
+                  entry.input_name, entry.output_name,
+                  entry.input_mean, entry.input_std);
     }
 
     initializeRouter();
@@ -183,11 +229,23 @@ void InferenceServer::initializeRouter()
             namespace fs = std::filesystem;
             std::string modelDir = fs::path(config_.labels_path).parent_path().string();
 
+            // Build an extension → type map from the BackendRegistry
+            std::vector<std::string> extFilters;
+            auto backendTypes = inference::BackendRegistry::instance().list();
+            for (auto& bt : backendTypes) {
+                if (bt == "onnx")      extFilters.push_back(".onnx");
+                if (bt == "tensorrt")  extFilters.push_back(".engine");
+            }
+
             json files = json::array();
             for (const auto& entry : fs::directory_iterator(modelDir)) {
                 if (!entry.is_regular_file()) continue;
                 auto ext = entry.path().extension().string();
-                if (ext != ".onnx" && ext != ".engine") continue;
+
+                bool matched = false;
+                for (auto& filter : extFilters)
+                    if (ext == filter) { matched = true; break; }
+                if (!matched) continue;
 
                 std::string filename = entry.path().filename().string();
                 std::string stem = entry.path().stem().string();
@@ -313,6 +371,7 @@ void InferenceServer::saveConfig() const
                 entry["version"] = m.version;
                 entry["type"] = m.type;
                 entry["path"] = m.path;
+                entry["task"] = m.task;
                 dynamicEngines.push_back(entry);
             }
         }

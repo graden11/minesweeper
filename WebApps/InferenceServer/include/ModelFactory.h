@@ -17,6 +17,7 @@ public:
         std::string version;
         std::string type;
         std::string path;
+        std::string task;
         bool is_latest = false;
     };
 
@@ -69,9 +70,9 @@ private:
         std::map<std::string, std::shared_ptr<InferenceEngine>>> models_;
     // name -> latest version string
     std::unordered_map<std::string, std::string> latestVersions_;
-    // name -> (version -> {type, path})
+    // name -> (version -> {type, path, task})
     std::unordered_map<std::string,
-        std::map<std::string, std::pair<std::string, std::string>>> metadata_;
+        std::map<std::string, std::tuple<std::string, std::string, std::string>>> metadata_;
 
     mutable std::shared_mutex mutex_;
 };

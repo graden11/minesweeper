@@ -1,4 +1,5 @@
 #include "../include/ModelFactory.h"
+#include "../include/ModelPipeline.h"
 #include <algorithm>
 #include <mutex>
 #include <sstream>
@@ -48,7 +49,13 @@ void ModelFactory::registerModel(const std::string& name,
 {
     std::unique_lock lock(mutex_);
     models_[name][version] = std::move(engine);
-    metadata_[name][version] = {type, path};
+
+    // Read the actual task type from the ModelPipeline if available
+    std::string task = "classification";
+    auto* pipeline = dynamic_cast<inference::ModelPipeline*>(models_[name][version].get());
+    if (pipeline)
+        task = inference::taskTypeToString(pipeline->config().task);
+    metadata_[name][version] = {type, path, task};
 
     // Update latest version
     auto it = latestVersions_.find(name);
@@ -133,8 +140,9 @@ std::vector<ModelFactory::ModelInfo> ModelFactory::listModels() const
             if (metaIt != metadata_.end()) {
                 auto typeIt = metaIt->second.find(version);
                 if (typeIt != metaIt->second.end()) {
-                    info.type = typeIt->second.first;
-                    info.path = typeIt->second.second;
+                    info.type = std::get<0>(typeIt->second);
+                    info.path = std::get<1>(typeIt->second);
+                    info.task = std::get<2>(typeIt->second);
                 }
             }
             result.push_back(info);
@@ -156,7 +164,7 @@ std::string ModelFactory::getModelType(const std::string& name, const std::strin
     auto it = metadata_.find(name);
     if (it == metadata_.end()) return "";
     auto vit = it->second.find(version);
-    return vit != it->second.end() ? vit->second.first : "";
+    return vit != it->second.end() ? std::get<0>(vit->second) : "";
 }
 
 std::string ModelFactory::getModelPath(const std::string& name, const std::string& version) const
@@ -165,7 +173,7 @@ std::string ModelFactory::getModelPath(const std::string& name, const std::strin
     auto it = metadata_.find(name);
     if (it == metadata_.end()) return "";
     auto vit = it->second.find(version);
-    return vit != it->second.end() ? vit->second.second : "";
+    return vit != it->second.end() ? std::get<1>(vit->second) : "";
 }
 
 size_t ModelFactory::modelCount() const
