@@ -319,6 +319,8 @@ void ResNet50TRTEngine::runInference(int slotIdx,
         cudaMemcpyAsync(slot.d_input, slot.h_input_pinned,
                         inputSize_, cudaMemcpyHostToDevice, stream_);
 
+        nvinfer1::Dims4 inputDims{1, INPUT_C, INPUT_H, INPUT_W};
+        context_->setInputShape(INPUT_NAME, inputDims);
         context_->setInputTensorAddress(INPUT_NAME, slot.d_input);
         context_->setOutputTensorAddress(OUTPUT_NAME, slot.d_output);
         context_->enqueueV3(stream_);
