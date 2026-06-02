@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libnvinfer.so* \
                     /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so* \
                     /usr/lib/x86_64-linux-gnu/libnvonnxparser.so* \
+                    /usr/lib/x86_64-linux-gnu/libnvinfer_builder* \
                     /usr/lib/x86_64-linux-gnu/
 RUN ldconfig
 
