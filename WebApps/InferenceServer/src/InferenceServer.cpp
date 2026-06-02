@@ -101,10 +101,6 @@ void InferenceServer::initialize()
                            const std::string& type, const std::string& path) {
         if (type == "tensorrt") {
 #ifdef ENABLE_TENSORRT
-            if (!std::ifstream(path).good()) {
-                spdlog::warn("TensorRT engine not found, skipping: {}:{}", name, version);
-                return;
-            }
             modelFactory_->registerModel(name, version,
                 std::make_shared<ResNet50TRTEngine>(path, labelsPath, batchSize), type, path);
 #else
