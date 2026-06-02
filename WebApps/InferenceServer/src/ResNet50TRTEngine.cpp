@@ -54,7 +54,7 @@ ResNet50TRTEngine::ResNet50TRTEngine(const std::string &enginePath, const std::s
             onnxPath = dir + "resnet50_classification.onnx";
         }
         LOG_INFO << "Attempting to build TRT engine from ONNX: " << onnxPath;
-        if (buildEngine(onnxPath, enginePath))
+        if (buildEngine(onnxPath, enginePath, maxBatchSize_))
         {
             LOG_INFO << "Successfully built TRT engine, reloading";
             if (!loadEngine(enginePath))
@@ -204,7 +204,7 @@ bool ResNet50TRTEngine::loadEngine(const std::string &enginePath)
     return true;
 }
 
-bool ResNet50TRTEngine::buildEngine(const std::string &onnxPath, const std::string &enginePath)
+bool ResNet50TRTEngine::buildEngine(const std::string &onnxPath, const std::string &enginePath, int maxBatchSize)
 {
     Logger localLogger;
     auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(localLogger));
@@ -248,6 +248,18 @@ bool ResNet50TRTEngine::buildEngine(const std::string &onnxPath, const std::stri
         config->setFlag(nvinfer1::BuilderFlag::kFP16);
         LOG_INFO << "TRT builder: FP16 enabled";
     }
+
+    // Dynamic batch: allow engine to handle batch sizes from 1 to maxBatchSize
+    auto profile = builder->createOptimizationProfile();
+    profile->setDimensions(INPUT_NAME, nvinfer1::OptProfileSelector::kMIN,
+                           nvinfer1::Dims4{1, INPUT_C, INPUT_H, INPUT_W});
+    profile->setDimensions(INPUT_NAME, nvinfer1::OptProfileSelector::kOPT,
+                           nvinfer1::Dims4{std::max(1, maxBatchSize / 2), INPUT_C, INPUT_H, INPUT_W});
+    profile->setDimensions(INPUT_NAME, nvinfer1::OptProfileSelector::kMAX,
+                           nvinfer1::Dims4{maxBatchSize, INPUT_C, INPUT_H, INPUT_W});
+    config->addOptimizationProfile(profile);
+    LOG_INFO << "TRT builder: dynamic batch profile [" << 1 << ", "
+             << std::max(1, maxBatchSize / 2) << ", " << maxBatchSize << "]";
 
     auto plan = std::unique_ptr<nvinfer1::IHostMemory>(builder->buildSerializedNetwork(*network, *config));
     if (!plan)
@@ -420,8 +432,13 @@ std::vector<std::string> ResNet50TRTEngine::predictBatch(
         return {};
     if (batchSize > maxBatchSize_)
     {
-        LOG_ERROR << "Batch size " << batchSize << " exceeds maxBatchSize " << maxBatchSize_;
-        batchSize = maxBatchSize_;
+        LOG_WARN << "Batch size " << batchSize << " exceeds maxBatchSize " << maxBatchSize_
+                 << ", processing sequentially";
+        std::vector<std::string> results;
+        results.reserve(images.size());
+        for (auto &img : images)
+            results.push_back(predictFromBytes(img));
+        return results;
     }
 
     if (!context_ || !h_batch_input_)
@@ -486,15 +503,29 @@ std::vector<std::string> ResNet50TRTEngine::predictBatch(
                         batchInputBytes, cudaMemcpyHostToDevice, stream_);
 
         nvinfer1::Dims4 inputDims{batchSize, INPUT_C, INPUT_H, INPUT_W};
-        context_->setInputShape(INPUT_NAME, inputDims);
+        if (!context_->setInputShape(INPUT_NAME, inputDims))
+        {
+            LOG_ERROR << "TRT setInputShape failed for batch " << batchSize
+                      << " — engine may lack dynamic batch support, rebuild required";
+            return std::vector<std::string>(images.size(),
+                R"({"status":"error","message":"TRT engine does not support dynamic batch, rebuild engine"})");
+        }
         context_->setInputTensorAddress(INPUT_NAME, d_batch_input_);
         context_->setOutputTensorAddress(OUTPUT_NAME, d_batch_output_);
-        context_->enqueueV3(stream_);
+        if (!context_->enqueueV3(stream_))
+        {
+            LOG_ERROR << "TRT enqueueV3 failed for batch " << batchSize;
+            return {};
+        }
 
-        cudaMemcpyAsync(h_batch_output_, d_batch_output_,
+        auto cudaErr = cudaMemcpyAsync(h_batch_output_, d_batch_output_,
                         batchOutputBytes, cudaMemcpyDeviceToHost, stream_);
+        if (cudaErr != cudaSuccess)
+            LOG_ERROR << "cudaMemcpyAsync D2H failed: " << cudaGetErrorString(cudaErr);
 
-        cudaStreamSynchronize(stream_);
+        cudaErr = cudaStreamSynchronize(stream_);
+        if (cudaErr != cudaSuccess)
+            LOG_ERROR << "cudaStreamSynchronize failed: " << cudaGetErrorString(cudaErr);
     }
 
     // Split output and build results

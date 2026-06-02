@@ -44,7 +44,7 @@ private:
                     uint8_t *h_resized_pinned, float *h_input_pinned);
     void runInference(int slotIdx, std::vector<std::pair<int, float>> &results);
     bool loadEngine(const std::string &enginePath);
-    static bool buildEngine(const std::string &onnxPath, const std::string &enginePath);
+    static bool buildEngine(const std::string &onnxPath, const std::string &enginePath, int maxBatchSize);
 
     class Logger : public nvinfer1::ILogger
     {
