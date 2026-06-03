@@ -149,5 +149,25 @@ void RedisSessionStorage::remove(const std::string& sessionId)
     if (reply) freeReplyObject(reply);
 }
 
+std::vector<std::string> RedisSessionStorage::getActiveIds()
+{
+    std::lock_guard<std::mutex> lock(redisMutex_);
+    if (!ctx_) reconnect();
+    if (!ctx_) return {};
+
+    auto* reply = static_cast<redisReply*>(
+        redisCommand(ctx_, "KEYS session:*"));
+    std::vector<std::string> ids;
+    if (reply && reply->type == REDIS_REPLY_ARRAY) {
+        for (size_t i = 0; i < reply->elements; ++i) {
+            std::string key(reply->element[i]->str, reply->element[i]->len);
+            if (key.size() > 8)  // strip "session:" prefix
+                ids.push_back(key.substr(8));
+        }
+    }
+    if (reply) freeReplyObject(reply);
+    return ids;
+}
+
 } // namespace session
 } // namespace http

@@ -37,5 +37,20 @@ void MemorySessionStorage::remove(const std::string& sessionId)
     sessions_.erase(sessionId);
 }
 
+std::vector<std::string> MemorySessionStorage::getActiveIds()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<std::string> ids;
+    for (auto it = sessions_.begin(); it != sessions_.end(); ) {
+        if (!it->second->isExpired()) {
+            ids.push_back(it->first);
+            ++it;
+        } else {
+            it = sessions_.erase(it);
+        }
+    }
+    return ids;
+}
+
 } // namespace session
 } // namespace http

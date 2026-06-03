@@ -18,6 +18,7 @@ public:
     void save(std::shared_ptr<Session> session) override;
     std::shared_ptr<Session> load(const std::string& sessionId) override;
     void remove(const std::string& sessionId) override;
+    std::vector<std::string> getActiveIds() override;
 
 private:
     redisContext* ctx_;

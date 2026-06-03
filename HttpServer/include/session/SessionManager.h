@@ -25,6 +25,9 @@ public:
     // 清理过期会话
     void cleanExpiredSessions();
 
+    // 获取所有活跃的 session id
+    std::vector<std::string> getActiveSessionIds();
+
     // 更新会话
     void updateSession(std::shared_ptr<Session> session)
     {

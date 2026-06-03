@@ -69,6 +69,9 @@ private:
     const std::string& getLabelsPath() const { return config_.labels_path; }
     void saveConfig() const;
 
+    // 清理已过期的在线用户记录
+    void cleanupStaleSessions();
+
     void getBackendData(const http::HttpRequest& req, http::HttpResponse* resp);
 
     void packageResp(const std::string& version, http::HttpResponse::HttpStatusCode statusCode,
