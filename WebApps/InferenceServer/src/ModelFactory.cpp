@@ -61,6 +61,8 @@ static ModelFactory::ModelMeta extractMeta(const std::string& type, const std::s
         m.input_channels = cfg.input.channels;
         m.input_name   = cfg.input.name;
         m.output_name  = cfg.output.name;
+        m.input_layout  = cfg.input.layout;
+        m.output_layout = cfg.output.layout;
         m.input_mean   = cfg.input.mean;
         m.input_std    = cfg.input.std;
         m.confidence_threshold = cfg.confidence_threshold;
@@ -177,6 +179,8 @@ std::vector<ModelFactory::ModelInfo> ModelFactory::listModels() const
                     info.input_channels = m.input_channels;
                     info.input_name   = m.input_name;
                     info.output_name  = m.output_name;
+                    info.input_layout  = m.input_layout;
+                    info.output_layout = m.output_layout;
                     info.input_mean   = m.input_mean;
                     info.input_std    = m.input_std;
                     info.confidence_threshold = m.confidence_threshold;

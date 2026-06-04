@@ -35,6 +35,10 @@ services:
       dockerfile: Dockerfile
     image: kama-httpserver:latest
     container_name: kama-httpserver
+    volumes:
+      - ./models:/app/models
+      - ./WebApps/InferenceServer/config.json:/app/config.json
+      - ./WebApps/InferenceServer/resource:/WebApps/InferenceServer/resource
     ports:
       - "80:80"
     environment:

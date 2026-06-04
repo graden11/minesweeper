@@ -41,6 +41,12 @@ message SegmentationData {
     int32  num_classes = 4;
 }
 
+// Feature extraction / embedding result
+message Embedding {
+    repeated float values    = 1;
+    int32           dimension = 2;
+}
+
 message PredictResponse {
     bool                 success      = 1;
     string               message      = 2;
@@ -48,4 +54,5 @@ message PredictResponse {
     repeated Prediction  predictions  = 4;      // classification
     repeated DetectionResult detections = 5;     // detection
     SegmentationData      segmentation = 6;      // segmentation
+    Embedding             embedding    = 7;      // feature extraction
 }

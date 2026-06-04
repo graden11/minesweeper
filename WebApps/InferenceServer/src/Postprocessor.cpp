@@ -2,6 +2,7 @@
 #include "../include/ClassificationPostprocessor.h"
 #include "../include/DetectionPostprocessor.h"
 #include "../include/SegmentationPostprocessor.h"
+#include "../include/FeatureExtractionPostprocessor.h"
 #include "../include/ModelConfig.h"
 
 namespace inference {
@@ -54,6 +55,8 @@ std::unique_ptr<Postprocessor> createPostprocessor(const ModelConfig& config)
             return std::make_unique<DetectionPostprocessor>(config);
         case TaskType::SEGMENTATION:
             return std::make_unique<SegmentationPostprocessor>(config);
+        case TaskType::FEATURE_EXTRACTION:
+            return std::make_unique<FeatureExtractionPostprocessor>();
     }
     // fallback
     return std::make_unique<ClassificationPostprocessor>(config.top_k);

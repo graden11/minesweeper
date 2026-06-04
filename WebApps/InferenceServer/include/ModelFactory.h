@@ -25,6 +25,8 @@ public:
         int input_channels = 3;
         std::string input_name = "input";
         std::string output_name = "output";
+        std::string input_layout = "chw";
+        std::string output_layout = "chw";
         std::vector<float> input_mean = {0.485f, 0.456f, 0.406f};
         std::vector<float> input_std  = {0.229f, 0.224f, 0.225f};
         float confidence_threshold = 0.5f;
@@ -45,6 +47,8 @@ public:
         int input_channels = 3;
         std::string input_name = "input";
         std::string output_name = "output";
+        std::string input_layout = "chw";
+        std::string output_layout = "chw";
         std::vector<float> input_mean = {0.485f, 0.456f, 0.406f};
         std::vector<float> input_std  = {0.229f, 0.224f, 0.225f};
         float confidence_threshold = 0.5f;

@@ -8,6 +8,9 @@
 
 
 #include "ModelFactory.h"
+#ifdef ENABLE_TENSORRT
+#include "ConversionManager.h"
+#endif
 #include "../../../HttpServer/include/http/HttpServer.h"
 #include "../../../HttpServer/include/utils/ConfigLoader.h"
 #include "../../../HttpServer/include/utils/MysqlUtil.h"
@@ -25,6 +28,7 @@ class ProtoPredictHandler;
 class ModelLoadHandler;
 class ModelListHandler;
 class ModelUnloadHandler;
+class ConvertHandler;
 class RequestBatcher;
 class ReadyHandler;
 
@@ -65,6 +69,13 @@ private:
     {
         return modelFactory_.get();
     }
+
+#ifdef ENABLE_TENSORRT
+    inference::ConversionManager* getConversionManager() const
+    {
+        return conversionManager_.get();
+    }
+#endif
 
     const std::string& getLabelsPath() const { return config_.labels_path; }
     void saveConfig() const;
@@ -119,6 +130,7 @@ private:
     friend class ModelLoadHandler;
     friend class ModelListHandler;
     friend class ModelUnloadHandler;
+    friend class ConvertHandler;
     friend class ReadyHandler;
 
 private:
@@ -134,6 +146,9 @@ private:
     std::atomic<int>                                 maxOnline_;
     // 模型工厂
     std::unique_ptr<ModelFactory>                    modelFactory_;
+#ifdef ENABLE_TENSORRT
+    std::unique_ptr<inference::ConversionManager>    conversionManager_;
+#endif
     // 动态批处理（shared_ptr 因为 PredictHandler 需要持有引用）
     std::shared_ptr<RequestBatcher>                  batcher_;
     // 应用配置

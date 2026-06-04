@@ -47,6 +47,10 @@ struct ModelEntryConfig {
     // Output
     std::string output_name = "output";
 
+    // Layout
+    std::string input_layout = "chw";
+    std::string output_layout = "chw";
+
     // Detection / Segmentation
     float confidence_threshold = 0.5f;
     float nms_threshold = 0.45f;
@@ -68,6 +72,10 @@ struct DynamicModelEntry {
     std::string output_name = "output";
     std::vector<float> input_mean = {0.485f, 0.456f, 0.406f};
     std::vector<float> input_std  = {0.229f, 0.224f, 0.225f};
+
+    // Layout
+    std::string input_layout = "chw";
+    std::string output_layout = "chw";
 
     // Detection
     float confidence_threshold = 0.5f;
@@ -200,6 +208,7 @@ inline AppConfig loadConfig(const std::string &filePath)
                     mec.input_width    = in.value("width", 224);
                     mec.input_height   = in.value("height", 224);
                     mec.input_channels = in.value("channels", 3);
+                    mec.input_layout   = in.value("layout", "chw");
                     if (in.contains("mean"))
                     {
                         mec.input_mean.clear();
@@ -216,7 +225,8 @@ inline AppConfig loadConfig(const std::string &filePath)
                 if (entry.contains("output"))
                 {
                     auto &out = entry["output"];
-                    mec.output_name = out.value("name", "output");
+                    mec.output_name   = out.value("name", "output");
+                    mec.output_layout = out.value("layout", "chw");
                 }
 
                 cfg.models[name] = mec;
@@ -254,6 +264,8 @@ inline AppConfig loadConfig(const std::string &filePath)
             dme.confidence_threshold = entry.value("confidence_threshold", 0.5f);
             dme.nms_threshold  = entry.value("nms_threshold", 0.45f);
             dme.max_detections = entry.value("max_detections", 100);
+            dme.input_layout  = entry.value("input_layout", "chw");
+            dme.output_layout = entry.value("output_layout", "chw");
             if (entry.contains("input_mean"))
             {
                 dme.input_mean.clear();

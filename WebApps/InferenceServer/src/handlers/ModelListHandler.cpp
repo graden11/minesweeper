@@ -33,6 +33,7 @@ void ModelListHandler::handle(const http::HttpRequest& req, http::HttpResponse* 
             entry["type"] = m.type;
             entry["path"] = m.path;
             entry["task"] = m.task;
+            entry["labels"] = m.labels;
             entry["is_latest"] = m.is_latest;
             result.push_back(entry);
         }

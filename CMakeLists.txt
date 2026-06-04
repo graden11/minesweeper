@@ -78,6 +78,8 @@ file(GLOB_RECURSE INFERENCE_SERVER_SRC
 
 if(NOT ENABLE_TENSORRT)
     list(FILTER INFERENCE_SERVER_SRC EXCLUDE REGEX "TRTBackend\\.cpp")
+    list(FILTER INFERENCE_SERVER_SRC EXCLUDE REGEX "ConversionManager\\.cpp")
+    list(FILTER INFERENCE_SERVER_SRC EXCLUDE REGEX "ConvertHandler\\.cpp")
 endif()
 
 if(NOT HIREDIS_LIBRARY)
@@ -85,7 +87,8 @@ if(NOT HIREDIS_LIBRARY)
 endif()
 
 # 添加主程序文件
-set(MAIN_SRC "${PROJECT_SOURCE_DIR}/WebApps/InferenceServer/src/main.cpp")
+set(MAIN_SRC "${PROJECT_SOURCE_DIR}/WebApps/InferenceServer/src/main.cpp"
+        WebApps/InferenceServer/include/FeatureExtractionPostprocessor.h)
 
 # 如果主程序文件不存在，创建一个
 if(NOT EXISTS ${MAIN_SRC})
@@ -112,6 +115,7 @@ add_executable(simple_server
     ${HTTP_SERVER_SRC}
     ${INFERENCE_SERVER_SRC}
     ${GENERATED_DIR}/inference.pb.cc
+        WebApps/InferenceServer/include/FeatureExtractionPostprocessor.h
 )
 
 # 链接必要的库

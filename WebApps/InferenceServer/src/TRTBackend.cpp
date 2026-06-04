@@ -43,29 +43,9 @@ TRTBackend::TRTBackend(const ModelConfig& config)
 
     if (!loadEngine(config.path))
     {
-        LOG_ERROR << "Failed to load TensorRT engine: " << config.path;
-        std::string onnxPath = std::filesystem::path(config.path).replace_extension(".onnx").string();
-        if (!std::ifstream(onnxPath).good())
-        {
-            size_t slash = config.path.rfind('/');
-            std::string dir = (slash != std::string::npos) ? config.path.substr(0, slash + 1) : "";
-            onnxPath = dir + "resnet50_classification.onnx";
-        }
-        LOG_INFO << "Attempting to build TRT engine from ONNX: " << onnxPath;
-        if (buildEngine(onnxPath, config.path, config_))
-        {
-            LOG_INFO << "Successfully built TRT engine, reloading";
-            if (!loadEngine(config.path))
-            {
-                LOG_ERROR << "Failed to load newly built TRT engine";
-                return;
-            }
-        }
-        else
-        {
-            LOG_ERROR << "Failed to build TRT engine from ONNX: " << onnxPath;
-            return;
-        }
+        LOG_ERROR << "Failed to load TensorRT engine: " << config.path
+                  << " — use POST /models/convert to build from ONNX first";
+        return;
     }
 
     // Create CUDA stream for async execution

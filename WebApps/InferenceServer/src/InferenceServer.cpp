@@ -13,6 +13,9 @@
 #include "../include/handlers/ModelUnloadHandler.h"
 #include "../include/handlers/HealthHandler.h"
 #include "../include/handlers/ReadyHandler.h"
+#ifdef ENABLE_TENSORRT
+#include "../include/handlers/ConvertHandler.h"
+#endif
 #include "../include/InferenceServer.h"
 #include "../include/RequestBatcher.h"
 #include "../include/ModelPipeline.h"
@@ -87,6 +90,10 @@ void InferenceServer::initialize()
     // 必须在initializeRouter之前，因为路由注册会用到modelFactory_
     modelFactory_ = std::make_unique<ModelFactory>();
 
+#ifdef ENABLE_TENSORRT
+    conversionManager_ = std::make_unique<inference::ConversionManager>();
+#endif
+
     // 初始化批处理器（在模型加载之前创建，因为路由注册需要它）
     if (config_.batching.enabled)
     {
@@ -112,7 +119,7 @@ void InferenceServer::initialize()
                            const std::string& inputName = "input",
                            const std::string& outputName = "output",
                            const std::vector<float>& inputMean = {0.485f, 0.456f, 0.406f},
-                           const std::vector<float>& inputStd = {0.229f, 0.224f, 0.225f}, const std::string& layout = "chw") {
+                           const std::vector<float>& inputStd = {0.229f, 0.224f, 0.225f}, const std::string& layout = "chw", const std::string& outputLayout = "chw") {
 
         if (!inference::BackendRegistry::instance().has(type)) {
             spdlog::warn("Backend '{}' not available, skipping: {}", type, name);
@@ -138,7 +145,8 @@ void InferenceServer::initialize()
         cfg.input.layout = layout;
         cfg.input.mean = inputMean;
         cfg.input.std  = inputStd;
-        cfg.output.name = outputName;
+        cfg.output.name   = outputName;
+        cfg.output.layout = outputLayout;
 
         if (!std::ifstream(path).good() && type == "onnx") {
             spdlog::warn("ONNX model not found, skipping: {}:{}", name, version);
@@ -168,7 +176,8 @@ void InferenceServer::initialize()
                   entry.task, entry.labels, entry.top_k,
                   entry.input_width, entry.input_height, entry.input_channels,
                   entry.input_name, entry.output_name,
-                  entry.input_mean, entry.input_std);
+                  entry.input_mean, entry.input_std,
+                  entry.input_layout, entry.output_layout);
     }
 
     // Load dynamic models from config (persisted by /models/load API)
@@ -177,7 +186,8 @@ void InferenceServer::initialize()
                   entry.task, entry.labels, entry.top_k,
                   entry.input_width, entry.input_height, entry.input_channels,
                   entry.input_name, entry.output_name,
-                  entry.input_mean, entry.input_std);
+                  entry.input_mean, entry.input_std,
+                  entry.input_layout, entry.output_layout);
     }
 
     initializeRouter();
@@ -256,9 +266,10 @@ void InferenceServer::initializeRouter()
 
                 std::string filename = entry.path().filename().string();
                 std::string stem = entry.path().stem().string();
+                std::string suffix = (ext == ".onnx") ? "_onnx" : "_trt";
 
                 json f;
-                f["name"] = stem;
+                f["name"] = stem + suffix;
                 f["filename"] = filename;
                 f["path"] = modelDir + "/" + filename;
                 f["type"] = (ext == ".onnx") ? "onnx" : "tensorrt";
@@ -286,6 +297,107 @@ void InferenceServer::initializeRouter()
     });
     httpServer_.Post("/models/load", std::make_shared<ModelLoadHandler>(this));
     httpServer_.Get("/models", std::make_shared<ModelListHandler>(this));
+
+    // 列出 models 目录下所有标签文件
+    httpServer_.Get("/models/labels", [this](const http::HttpRequest& req, http::HttpResponse* resp) {
+        try {
+            namespace fs = std::filesystem;
+            std::string modelDir = fs::path(config_.labels_path).parent_path().string();
+            json files = json::array();
+            for (const auto& entry : fs::directory_iterator(modelDir)) {
+                if (!entry.is_regular_file()) continue;
+                if (entry.path().extension() == ".txt") {
+                    json f;
+                    f["filename"] = entry.path().filename().string();
+                    f["path"] = modelDir + "/" + entry.path().filename().string();
+                    files.push_back(f);
+                }
+            }
+            std::string body = files.dump();
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
+            resp->setContentType("application/json");
+            resp->setContentLength(body.size());
+            resp->setBody(body);
+            resp->setCloseConnection(false);
+        } catch (const std::exception& e) {
+            json err; err["status"]="error"; err["message"]=e.what();
+            std::string b = err.dump();
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k500InternalServerError, "Internal Server Error");
+            resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+            resp->setCloseConnection(true);
+        }
+    });
+
+    // 删除模型文件
+    namespace fs = std::filesystem;
+    httpServer_.addRoute(http::HttpRequest::kPost, "/models/delete", [this](const http::HttpRequest& req, http::HttpResponse* resp) {
+        try {
+            json reqBody = json::parse(req.getBody());
+            std::string filePath = reqBody.value("path", "");
+            if (filePath.empty()) {
+                json err; err["status"]="error"; err["message"]="path is required";
+                std::string b = err.dump();
+                resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
+                resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+                resp->setCloseConnection(false); return;
+            }
+            // 防止路径穿越：只允许删除 models 目录下的文件
+            std::string modelDir = fs::path(config_.labels_path).parent_path().string();
+            std::string absPath = fs::absolute(filePath).string();
+            std::string absModelDir = fs::absolute(modelDir).string();
+            if (absPath.find(absModelDir) != 0) {
+                json err; err["status"]="error"; err["message"]="invalid path";
+                std::string b = err.dump();
+                resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
+                resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+                resp->setCloseConnection(false); return;
+            }
+            if (!std::ifstream(filePath).good()) {
+                json err; err["status"]="error"; err["message"]="file not found: "+filePath;
+                std::string b = err.dump();
+                resp->setStatusLine(req.getVersion(), http::HttpResponse::k404NotFound, "Not Found");
+                resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+                resp->setCloseConnection(false); return;
+            }
+            // 检查文件是否正在被加载
+            auto loaded = modelFactory_->listModels();
+            std::string cwd = fs::current_path().string();
+            std::string reqPathNorm = fs::weakly_canonical(filePath).string();
+            for (auto& m : loaded) {
+                std::string mPathNorm = fs::weakly_canonical(m.path).string();
+                if (reqPathNorm == mPathNorm) {
+                    json err; err["status"]="error"; err["message"]="model is currently loaded, unload first";
+                    std::string b = err.dump();
+                    resp->setStatusLine(req.getVersion(), http::HttpResponse::k409Conflict, "Conflict");
+                    resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+                    resp->setCloseConnection(false); return;
+                }
+            }
+            fs::remove(filePath);
+            json ok; ok["status"]="ok"; ok["message"]="deleted: "+filePath;
+            std::string b = ok.dump();
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
+            resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+            resp->setCloseConnection(false);
+            LOG_INFO << "Model file deleted: " << filePath;
+        } catch (const json::exception& e) {
+            json err; err["status"]="error"; err["message"]=std::string("invalid JSON: ")+e.what();
+            std::string b = err.dump();
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
+            resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+            resp->setCloseConnection(false);
+        } catch (const std::exception& e) {
+            json err; err["status"]="error"; err["message"]=e.what();
+            std::string b = err.dump();
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k500InternalServerError, "Internal Server Error");
+            resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+            resp->setCloseConnection(true);
+        }
+    });
+#ifdef ENABLE_TENSORRT
+    httpServer_.Get("/models/convert/status", std::make_shared<ConvertHandler>(this));
+    httpServer_.Post("/models/convert", std::make_shared<ConvertHandler>(this));
+#endif
     httpServer_.addRoute(http::HttpRequest::kDelete, "/models/:name/:version",
                          std::make_shared<ModelUnloadHandler>(this));
 }
@@ -430,6 +542,8 @@ void InferenceServer::saveConfig() const
                 entry["input_width"]    = m.input_width;
                 entry["input_height"]   = m.input_height;
                 entry["input_channels"] = m.input_channels;
+                entry["input_layout"]   = m.input_layout;
+                entry["output_layout"]  = m.output_layout;
                 entry["input_mean"]     = m.input_mean;
                 entry["input_std"]      = m.input_std;
                 entry["confidence_threshold"] = m.confidence_threshold;

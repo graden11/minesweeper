@@ -13,6 +13,64 @@ OnnxBackend::OnnxBackend(const ModelConfig& config)
 {
     sessionOpts_.SetIntraOpNumThreads(1);
     session_ = std::make_unique<Ort::Session>(env_, config.path.c_str(), sessionOpts_);
+
+    // Auto-detect real tensor names from model (when config is still at defaults)
+    Ort::AllocatorWithDefaultOptions alloc;
+    if (inputName_ == "input") {
+        auto namePtr = session_->GetInputNameAllocated(0, alloc);
+        if (namePtr) {
+            inputName_ = namePtr.get();
+            LOG_INFO << "OnnxBackend: auto-detected input name = " << inputName_;
+        }
+    }
+    if (outputName_ == "output") {
+        auto namePtr = session_->GetOutputNameAllocated(0, alloc);
+        if (namePtr) {
+            outputName_ = namePtr.get();
+            LOG_INFO << "OnnxBackend: auto-detected output name = " << outputName_;
+        }
+    }
+
+    // Auto-detect input shape from model
+    auto inputTypeInfo = session_->GetInputTypeInfo(0);
+    auto inputTensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
+    auto inputShape = inputTensorInfo.GetShape();
+    if (inputShape.size() >= 3) {
+        detectedChannels_ = static_cast<int>(inputShape[1]);
+        detectedHeight_   = static_cast<int>(inputShape[2]);
+        detectedWidth_    = static_cast<int>(inputShape[3]);
+        // Infer layout: NHWC has C in last dim, NCHW has C in dim 1
+        if (inputShape[1] > 4 && inputShape[inputShape.size()-1] <= 4) {
+            // NHWC layout: spatial dims come before channels
+            detectedHeight_   = static_cast<int>(inputShape[1]);
+            detectedWidth_    = static_cast<int>(inputShape[2]);
+            detectedChannels_ = static_cast<int>(inputShape[3]);
+            detectedLayout_ = "hwc";
+        } else {
+            detectedLayout_ = "chw";
+        }
+        detectedShape_ = true;
+        LOG_INFO << "OnnxBackend: auto-detected shape: " << detectedChannels_
+                 << "x" << detectedHeight_ << "x" << detectedWidth_
+                 << " layout=" << detectedLayout_;
+    }
+
+    // Auto-detect task type from output shape
+    auto outputTypeInfo = session_->GetOutputTypeInfo(0);
+    auto outputTensorInfo = outputTypeInfo.GetTensorTypeAndShapeInfo();
+    auto outShape = outputTensorInfo.GetShape();
+    int dims = static_cast<int>(outShape.size());
+    if (dims == 2) {
+        detectedTask_ = "classification";
+    } else if (dims == 3) {
+        detectedTask_ = "detection";
+    } else if (dims >= 4) {
+        detectedTask_ = "segmentation";
+    }
+    if (!detectedTask_.empty()) {
+        LOG_INFO << "OnnxBackend: auto-detected task = " << detectedTask_ << " (output dims=" << dims << ")";
+    }
+
     LOG_INFO << "OnnxBackend initialized, model: " << config.path
              << ", maxBatchSize: " << maxBatchSize_;
 }

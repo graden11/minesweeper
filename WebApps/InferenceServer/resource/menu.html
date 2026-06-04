@@ -265,6 +265,9 @@ body::before {
 .badge-onnx { background: rgba(46,204,113,0.15); color: var(--color-success); }
 .badge-trt  { background: var(--color-primary-dim); color: var(--color-primary); }
 .badge-latest { background: rgba(240,160,64,0.15); color: var(--color-warn); }
+.badge-cls { background: rgba(46,204,113,0.15); color: var(--color-success); }
+.badge-det { background: rgba(240,160,64,0.15); color: var(--color-warn); }
+.badge-seg { background: rgba(92,108,240,0.15); color: var(--color-accent); }
 
 /* Health checks */
 .checks-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -356,6 +359,20 @@ select option {
 }
 .model-table tbody tr:hover { background: rgba(255,255,255,0.04); }
 :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* Modal */
+.modal-overlay { display:none; position:fixed; top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:200;justify-content:center;align-items:center; }
+.modal-overlay.active { display:flex; }
+.modal { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); padding:24px; width:90%; max-width:480px; }
+.modal h3 { margin-bottom:16px; }
+.modal .field { margin-bottom:12px; }
+.modal .field input, .modal .field select { width:100%; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+.btn-cancel { padding:8px 16px; background:transparent; color:var(--color-text-dim); border:1px solid var(--color-border); border-radius:var(--radius-sm); cursor:pointer; font-family:inherit; }
+#convert-progress { display:none; margin-top:12px; }
+.progress-bar { height:6px; background:var(--color-input-bg); border-radius:3px; overflow:hidden; margin-top:6px; }
+.progress-fill { height:100%; background:var(--color-primary); width:0; transition:width 0.3s; }
+
 </style>
 </head>
 <body>
@@ -423,8 +440,8 @@ select option {
   <section class="section">
     <div class="section-title">模型管理</div>
     <table class="model-table">
-      <thead><tr><th>名称</th><th>格式</th><th>状态</th><th>操作</th></tr></thead>
-      <tbody id="model-tbody"><tr><td colspan="4" style="color:var(--color-text-dim)">加载中...</td></tr></tbody>
+      <thead><tr><th>名称</th><th>格式</th><th>类型</th><th>标签</th><th>状态</th><th>操作</th></tr></thead>
+      <tbody id="model-tbody"><tr><td colspan="6" style="color:var(--color-text-dim)">加载中...</td></tr></tbody>
     </table>
   </section>
 
@@ -446,6 +463,8 @@ select option {
         <tr><td><span class="method-badge get">GET</span></td><td>/models</td><td>已加载模型列表</td></tr>
         <tr><td><span class="method-badge post">POST</span></td><td>/models/load</td><td>动态加载模型 (需登录)</td></tr>
         <tr><td><span class="method-badge del">DELETE</span></td><td>/models/:name/:version</td><td>卸载模型 (需登录)</td></tr>
+        <tr><td><span class="method-badge post">POST</span></td><td>/models/convert</td><td>ONNX→TensorRT转换 (需登录)</td></tr>
+        <tr><td><span class="method-badge get">GET</span></td><td>/models/convert/status</td><td>查询转换任务状态</td></tr>
         <tr><td><span class="method-badge get">GET</span></td><td>/backend</td><td>系统管理后台</td></tr>
         <tr><td><span class="method-badge get">GET</span></td><td>/backend_data</td><td>在线统计 JSON</td></tr>
         <tr><td><span class="method-badge get">GET</span></td><td>/menu</td><td>控制台 (本页)</td></tr>
@@ -454,6 +473,24 @@ select option {
   </section>
 
 </main>
+
+<!-- Convert Modal -->
+<div class="modal-overlay" id="convert-modal">
+  <div class="modal">
+    <h3>ONNX 转 TensorRT</h3>
+    <div class="field"><label>源文件</label><input type="text" id="conv-onnx" readonly></div>
+    <div class="field"><label>输出文件</label><input type="text" id="conv-engine"></div>
+    <div class="field"><label>精度</label><select id="conv-precision"><option value="fp16" selected>FP16（推荐）</option><option value="fp32">FP32</option></select></div>
+    <div class="field"><label>输入尺寸 (W×H×C)</label><div style="display:flex;gap:6px"><input type="number" id="conv-w" value="224" style="width:33%"><input type="number" id="conv-h" value="224" style="width:33%"><input type="number" id="conv-c" value="3" style="width:33%"></div></div>
+    <div class="field"><label>输入张量名</label><input type="text" id="conv-iname" value="input"></div>
+    <div class="field"><label>最大 Batch Size</label><input type="number" id="conv-batch" value="8"></div>
+    <div id="convert-progress"><span id="conv-msg"></span><div class="progress-bar"><div class="progress-fill" id="conv-bar"></div></div></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="conv-cancel">取消</button>
+      <button class="btn btn-primary" id="conv-submit">开始转换</button>
+    </div>
+  </div>
+</div>
 
 <footer class="footer">
   <p>AI 推理平台 &mdash; ONNX Runtime / TensorRT / C++17 / RESTful</p>
@@ -552,15 +589,17 @@ var loadedModels = [];  // [{name, version, type, path, is_latest}]
 function loadModelTable() {
   Promise.all([
     fetch('/models').then(function(r) { return r.json(); }),
-    fetch('/models/available').then(function(r) { return r.json(); })
+    fetch('/models/available').then(function(r) { return r.json(); }),
+    fetch('/models/labels').then(function(r) { return r.json(); })
   ])
   .then(function(results) {
     loadedModels = results[0];
     var files = results[1];
+    var labelFiles = results[2];
     var tbody = document.getElementById('model-tbody');
 
     if (!files.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-text-dim)">暂无模型文件</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--color-text-dim)">暂无模型文件</td></tr>';
       return;
     }
 
@@ -580,18 +619,42 @@ function loadModelTable() {
         }
       }
 
-      var statusHtml, actionHtml;
+      var taskBadge = '-';
+      if (loaded && loaded.task) {
+        var taskMap = {classification:'分类',detection:'检测',segmentation:'分割'};
+        var taskLabel = taskMap[loaded.task] || loaded.task;
+        var taskCls = loaded.task === 'detection' ? 'badge-det' : (loaded.task === 'segmentation' ? 'badge-seg' : 'badge-cls');
+        taskBadge = '<span class="badge '+taskCls+'">'+taskLabel+'</span>';
+      }
+
+      var statusHtml, actionHtml, labelsHtml;
       if (loaded) {
         statusHtml = '<span style="color:var(--color-success);font-size:0.8rem">已加载 (v' + esc(loaded.version) + ')</span>';
+        labelsHtml = loaded.labels ? '<span style="font-size:0.78rem;color:var(--color-text-dim)">'+esc(loaded.labels.split('/').pop())+'</span>' : '<span style="color:var(--color-text-dim)">—</span>';
         actionHtml = '<button class="btn btn-danger btn-sm btn-unload" data-name="'+esc(loaded.name)+'" data-version="'+esc(loaded.version)+'">卸载</button>';
       } else {
         statusHtml = '<span style="color:var(--color-text-dim);font-size:0.8rem">未加载</span>';
+        // Build labels select
+        var globalLabel = loadedModels.length > 0 && loadedModels[0].labels ? loadedModels[0].labels : '';
+        labelsHtml = '<select class="lbl-sel" data-row="'+esc(f.name)+'" style="font-size:0.75rem;padding:2px 4px;width:120px">';
+        labelsHtml += '<option value="">默认</option>';
+        for (var li = 0; li < labelFiles.length; li++) {
+          var sel = (labelFiles[li].path === globalLabel) ? ' selected' : '';
+          labelsHtml += '<option value="'+esc(labelFiles[li].path)+'"'+sel+'>'+esc(labelFiles[li].filename)+'</option>';
+        }
+        labelsHtml += '</select>';
         actionHtml = '<button class="btn btn-primary btn-sm btn-load-file" data-name="'+esc(f.name)+'" data-type="'+esc(f.type)+'" data-path="'+esc(f.path)+'">加载</button>';
+        if (f.type === 'onnx') {
+          actionHtml += ' <button class="btn btn-sm btn-convert" data-name="'+esc(f.name)+'" data-path="'+esc(f.path)+'" style="background:transparent;color:var(--color-primary);border:1px solid var(--color-primary-dim)">转换</button>';
+        }
+        actionHtml += ' <button class="btn btn-danger btn-sm btn-delete-file" data-path="'+esc(f.path)+'">删除</button>';
       }
 
       html += '<tr>';
       html += '<td>'+esc(f.name)+'</td>';
       html += '<td>'+typeBadge+'</td>';
+      html += '<td>'+taskBadge+'</td>';
+      html += '<td>'+labelsHtml+'</td>';
       html += '<td>'+statusHtml+'</td>';
       html += '<td>'+actionHtml+'</td>';
       html += '</tr>';
@@ -627,12 +690,16 @@ function loadModelTable() {
         var name = this.dataset.name;
         var type = this.dataset.type;
         var path = this.dataset.path;
+        // find the labels select in the same row
+        var row = this.closest('tr');
+        var lblSel = row.querySelector('.lbl-sel');
+        var labels = lblSel ? lblSel.value : '';
         btn.disabled = true;
         btn.textContent = '加载中...';
         fetch('/models/load', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name, version: '1', type: type, path: path })
+          body: JSON.stringify({ name: name, version: '1', type: type, path: path, labels: labels })
         })
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -642,13 +709,121 @@ function loadModelTable() {
         .catch(function() { alert('网络错误'); btn.disabled = false; btn.textContent = '加载'; });
       });
     });
+
+    // Bind convert buttons
+    var pollTimer = null;
+    tbody.querySelectorAll('.btn-convert').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var onnxPath = this.dataset.path;
+        var dir = onnxPath.substring(0, onnxPath.lastIndexOf('/') + 1);
+        var stem = onnxPath.substring(onnxPath.lastIndexOf('/') + 1).replace(/\.onnx$/i, '');
+        document.getElementById('conv-onnx').value = onnxPath;
+        document.getElementById('conv-engine').value = dir + stem + '.engine';
+        document.getElementById('conv-precision').value = 'fp16';
+        document.getElementById('conv-w').value = 224;
+        document.getElementById('conv-h').value = 224;
+        document.getElementById('conv-c').value = 3;
+        document.getElementById('conv-iname').value = 'input';
+        document.getElementById('conv-batch').value = 8;
+        document.getElementById('convert-progress').style.display = 'none';
+        document.getElementById('conv-submit').disabled = false;
+        document.getElementById('conv-msg').textContent = '';
+        document.getElementById('conv-bar').style.width = '0';
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        document.getElementById('convert-modal').classList.add('active');
+      });
+    });
+
+    // Bind delete buttons
+    tbody.querySelectorAll('.btn-delete-file').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var path = this.dataset.path;
+        if (!confirm('确定要删除 ' + path + ' 吗？此操作不可撤销。')) return;
+        fetch('/models/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: path })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.status === 'ok') { loadModelTable(); loadStats(); }
+          else { alert('删除失败: ' + (d.message || '')); }
+        })
+        .catch(function() { alert('网络错误'); });
+      });
+    });
   })
   .catch(function() {
-    document.getElementById('model-tbody').innerHTML = '<tr><td colspan="4" style="color:var(--color-error)">加载失败</td></tr>';
+    document.getElementById('model-tbody').innerHTML = '<tr><td colspan="6" style="color:var(--color-error)">加载失败</td></tr>';
   });
 }
 
 loadModelTable();
+
+/* ===== Convert Modal ===== */
+document.getElementById('conv-cancel').addEventListener('click', function() {
+  if (window._pollTimer) { clearInterval(window._pollTimer); window._pollTimer = null; }
+  document.getElementById('convert-modal').classList.remove('active');
+});
+
+document.getElementById('convert-modal').addEventListener('click', function(e) {
+  if (e.target === this) { this.classList.remove('active'); if (window._pollTimer) { clearInterval(window._pollTimer); window._pollTimer = null; } }
+});
+
+document.getElementById('conv-submit').addEventListener('click', function() {
+  var submitBtn = this;
+  submitBtn.disabled = true;
+  var progDiv = document.getElementById('convert-progress');
+  var msgEl = document.getElementById('conv-msg');
+  var barEl = document.getElementById('conv-bar');
+  progDiv.style.display = 'block';
+  msgEl.textContent = '提交中...';
+  barEl.style.width = '0';
+
+  var body = {
+    onnx_path: document.getElementById('conv-onnx').value,
+    engine_path: document.getElementById('conv-engine').value,
+    precision: document.getElementById('conv-precision').value,
+    input_channels: parseInt(document.getElementById('conv-c').value) || 3,
+    input_height: parseInt(document.getElementById('conv-h').value) || 224,
+    input_width: parseInt(document.getElementById('conv-w').value) || 224,
+    input_name: document.getElementById('conv-iname').value || 'input',
+    max_batch_size: parseInt(document.getElementById('conv-batch').value) || 8
+  };
+
+  fetch('/models/convert', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.status !== 'ok') { msgEl.textContent = '提交失败: ' + (d.message || ''); submitBtn.disabled = false; return; }
+    var jobId = d.job_id;
+    msgEl.textContent = '转换中...';
+    window._pollTimer = setInterval(function() {
+      fetch('/models/convert/status?id=' + encodeURIComponent(jobId))
+        .then(function(r) { return r.json(); })
+        .then(function(j) {
+          barEl.style.width = j.progress + '%';
+          msgEl.textContent = j.message || '';
+          if (j.status === 2) { // Completed
+            clearInterval(window._pollTimer); window._pollTimer = null;
+            msgEl.textContent = '转换完成! ' + (j.engine_size ? (j.engine_size / 1024 / 1024).toFixed(1) + ' MB' : '');
+            barEl.style.width = '100%';
+            loadModelTable(); loadStats();
+          } else if (j.status === 3) { // Failed
+            clearInterval(window._pollTimer); window._pollTimer = null;
+            msgEl.textContent = '转换失败: ' + (j.error || '未知错误');
+            barEl.style.width = '0';
+            submitBtn.disabled = false;
+          }
+        })
+        .catch(function() {});
+    }, 2000);
+  })
+  .catch(function() { msgEl.textContent = '网络错误'; submitBtn.disabled = false; });
+});
 
 /* ===== Predict Demo ===== */
 var fileInput = document.getElementById('file-input');

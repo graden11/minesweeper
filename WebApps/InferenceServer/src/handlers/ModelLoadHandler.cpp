@@ -3,6 +3,7 @@
 #include "../../include/ModelFactory.h"
 #include "../../include/ModelPipeline.h"
 #include "../../include/BackendRegistry.h"
+#include "../../include/OnnxBackend.h"
 #include "../../include/Preprocessor.h"
 #include "../../include/Postprocessor.h"
 
@@ -158,6 +159,21 @@ void ModelLoadHandler::handle(const http::HttpRequest& req, http::HttpResponse* 
 
         // Create pipeline
         auto backend = inference::BackendRegistry::instance().create(type, cfg);
+        if (auto* onnx = dynamic_cast<inference::OnnxBackend*>(backend.get())) {
+            if (onnx->detectedShape()) {
+                cfg.input.preferred_width  = onnx->detectedWidth();
+                cfg.input.preferred_height = onnx->detectedHeight();
+                cfg.input.channels         = onnx->detectedChannels();
+                cfg.input.layout           = onnx->detectedLayout();
+                cfg.output.layout          = onnx->detectedLayout();
+            }
+            cfg.input.name  = onnx->inputName();
+            cfg.output.name = onnx->outputName();
+            if (!onnx->detectedTask().empty() && taskStr == "classification") {
+                cfg.task = inference::parseTaskType(onnx->detectedTask());
+                LOG_INFO << "ModelLoad: auto-detected task = " << onnx->detectedTask();
+            }
+        }
         if (!backend)
         {
             json err;

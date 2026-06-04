@@ -12,22 +12,25 @@ enum class TaskType {
     CLASSIFICATION,
     DETECTION,
     SEGMENTATION,
+    FEATURE_EXTRACTION,
 };
 
 inline TaskType parseTaskType(const std::string& s)
 {
-    if (s == "classification") return TaskType::CLASSIFICATION;
-    if (s == "detection")      return TaskType::DETECTION;
-    if (s == "segmentation")   return TaskType::SEGMENTATION;
+    if (s == "classification")       return TaskType::CLASSIFICATION;
+    if (s == "detection")            return TaskType::DETECTION;
+    if (s == "segmentation")         return TaskType::SEGMENTATION;
+    if (s == "feature_extraction")   return TaskType::FEATURE_EXTRACTION;
     return TaskType::CLASSIFICATION; // default
 }
 
 inline const char* taskTypeToString(TaskType t)
 {
     switch (t) {
-        case TaskType::CLASSIFICATION: return "classification";
-        case TaskType::DETECTION:      return "detection";
-        case TaskType::SEGMENTATION:   return "segmentation";
+        case TaskType::CLASSIFICATION:       return "classification";
+        case TaskType::DETECTION:            return "detection";
+        case TaskType::SEGMENTATION:         return "segmentation";
+        case TaskType::FEATURE_EXTRACTION:   return "feature_extraction";
     }
     return "unknown";
 }

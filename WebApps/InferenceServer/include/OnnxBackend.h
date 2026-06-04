@@ -27,6 +27,14 @@ public:
                                   std::vector<int64_t>& outputShape) override;
 
     int  maxBatchSize() const override { return maxBatchSize_; }
+    int  detectedWidth()  const { return detectedWidth_; }
+    int  detectedHeight() const { return detectedHeight_; }
+    int  detectedChannels() const { return detectedChannels_; }
+    const std::string& detectedLayout() const { return detectedLayout_; }
+    const std::string& detectedTask() const { return detectedTask_; }
+    bool detectedShape() const { return detectedShape_; }
+    const std::string& inputName()  const { return inputName_; }
+    const std::string& outputName() const { return outputName_; }
     bool isReady() const override { return session_ != nullptr; }
 
 private:
@@ -38,6 +46,12 @@ private:
     std::string inputName_;
     std::string outputName_;
     int maxBatchSize_;
+    int detectedWidth_ = 224;
+    int detectedHeight_ = 224;
+    int detectedChannels_ = 3;
+    std::string detectedLayout_ = "chw";
+    std::string detectedTask_;
+    bool detectedShape_ = false;
     std::mutex inferenceMutex_;
 };
 
