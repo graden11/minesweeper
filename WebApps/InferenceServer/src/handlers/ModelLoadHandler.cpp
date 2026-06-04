@@ -137,13 +137,16 @@ void ModelLoadHandler::handle(const http::HttpRequest& req, http::HttpResponse* 
         }
 
         // Build ModelConfig
-        std::string effectiveLabels = perModelLabels.empty() ? labelsPath : perModelLabels;
         inference::ModelConfig cfg;
         cfg.name    = name;
         cfg.version = version;
         cfg.type    = type;
         cfg.path    = path;
         cfg.task    = inference::parseTaskType(taskStr);
+        // feature_extraction needs no labels; other tasks fall back to global if empty
+        std::string effectiveLabels = perModelLabels;
+        if (effectiveLabels.empty() && cfg.task != inference::TaskType::FEATURE_EXTRACTION)
+            effectiveLabels = labelsPath;
         cfg.labels_path = effectiveLabels;
         cfg.top_k   = topK;
         cfg.max_batch_size = batchSize;

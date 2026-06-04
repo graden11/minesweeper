@@ -126,8 +126,6 @@ void InferenceServer::initialize()
             return;
         }
 
-        std::string effectiveLabels = perModelLabels.empty() ? labelsPath : perModelLabels;
-
         // Build ModelConfig from all parameters
         inference::ModelConfig cfg;
         cfg.name    = name;
@@ -135,6 +133,10 @@ void InferenceServer::initialize()
         cfg.type    = type;
         cfg.path    = path;
         cfg.task    = inference::parseTaskType(taskStr);
+        // feature_extraction needs no labels; other tasks fall back to global if empty
+        std::string effectiveLabels = perModelLabels;
+        if (effectiveLabels.empty() && cfg.task != inference::TaskType::FEATURE_EXTRACTION)
+            effectiveLabels = labelsPath;
         cfg.labels_path = effectiveLabels;
         cfg.top_k   = topK;
         cfg.max_batch_size = batchSize;
