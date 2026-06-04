@@ -268,6 +268,7 @@ body::before {
 .badge-cls { background: rgba(46,204,113,0.15); color: var(--color-success); }
 .badge-det { background: rgba(240,160,64,0.15); color: var(--color-warn); }
 .badge-seg { background: rgba(92,108,240,0.15); color: var(--color-accent); }
+.badge-emb { background: rgba(160,120,240,0.15); color: #a078f0; }
 
 /* Health checks */
 .checks-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -621,9 +622,9 @@ function loadModelTable() {
 
       var taskBadge = '-';
       if (loaded && loaded.task) {
-        var taskMap = {classification:'分类',detection:'检测',segmentation:'分割'};
+        var taskMap = {classification:'分类',detection:'检测',segmentation:'分割',feature_extraction:'特征'};
         var taskLabel = taskMap[loaded.task] || loaded.task;
-        var taskCls = loaded.task === 'detection' ? 'badge-det' : (loaded.task === 'segmentation' ? 'badge-seg' : 'badge-cls');
+        var taskCls = loaded.task === 'detection' ? 'badge-det' : (loaded.task === 'segmentation' ? 'badge-seg' : (loaded.task === 'feature_extraction' ? 'badge-emb' : 'badge-cls'));
         taskBadge = '<span class="badge '+taskCls+'">'+taskLabel+'</span>';
       }
 
@@ -886,6 +887,13 @@ uploadBtn.addEventListener('click', function() {
                 (b.x1||0).toFixed(0)+','+(b.y1||0).toFixed(0)+')→('+(b.x2||0).toFixed(0)+','+(b.y2||0).toFixed(0)+')</div>';
               card.appendChild(item);
             });
+          } else if (r.embedding) {
+            var dim = r.dimension || r.embedding.length;
+            var preview = r.embedding.slice(0, 8).map(function(v) { return v.toFixed(4); }).join(', ');
+            var item = document.createElement('div');
+            item.className = 'result-item';
+            item.innerHTML = '<span>Embedding ('+dim+'d)</span><span class="score" style="font-size:0.7rem">'+preview+'...</span>';
+            card.appendChild(item);
           } else if (r.status === 'error') {
             card.innerHTML += '<p style="color:var(--color-error);font-size:0.85rem;margin-top:4px">错误: '+esc(r.message||'')+'</p>';
           }

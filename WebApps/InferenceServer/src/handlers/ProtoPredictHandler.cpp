@@ -91,6 +91,13 @@ void ProtoPredictHandler::handle(const http::HttpRequest &req, http::HttpRespons
                     seg->set_width(maskObj.value("width", 0));
                     seg->set_num_classes(maskObj.value("num_classes", 0));
                 }
+                else if (taskType == "feature_extraction" && result.contains("embedding"))
+                {
+                    auto* emb = response.mutable_embedding();
+                    emb->set_dimension(result["dimension"].get<int>());
+                    for (auto& v : result["embedding"])
+                        emb->add_values(v.get<float>());
+                }
                 else
                 {
                     // Classification (default)
@@ -151,6 +158,13 @@ void ProtoPredictHandler::handle(const http::HttpRequest &req, http::HttpRespons
                     seg->set_height(maskObj.value("height", 0));
                     seg->set_width(maskObj.value("width", 0));
                     seg->set_num_classes(maskObj.value("num_classes", 0));
+                }
+                else if (taskType == "feature_extraction" && result.contains("embedding"))
+                {
+                    auto* emb = response.mutable_embedding();
+                    emb->set_dimension(result["dimension"].get<int>());
+                    for (auto& v : result["embedding"])
+                        emb->add_values(v.get<float>());
                 }
                 else
                 {
