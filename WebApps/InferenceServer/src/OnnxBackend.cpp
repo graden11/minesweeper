@@ -1,5 +1,6 @@
 #include "../include/OnnxBackend.h"
 
+#include <algorithm>
 #include <muduo/base/Logging.h>
 
 namespace inference {
@@ -61,7 +62,16 @@ OnnxBackend::OnnxBackend(const ModelConfig& config)
     auto outShape = outputTensorInfo.GetShape();
     int dims = static_cast<int>(outShape.size());
     if (dims == 2) {
-        detectedTask_ = "classification";
+        // 2D output could be classification [N, classes] or feature_extraction [N, emb_dim]
+        // Heuristic: >2000 dims is almost certainly embedding; also check output name
+        int64_t outDim = outShape.size() >= 2 ? outShape[1] : 0;
+        std::string outName = outputName_;
+        std::transform(outName.begin(), outName.end(), outName.begin(), ::tolower);
+        if (outDim > 2000 || outName.find("embed") != std::string::npos) {
+            detectedTask_ = "feature_extraction";
+        } else {
+            detectedTask_ = "classification";
+        }
     } else if (dims == 3) {
         detectedTask_ = "detection";
     } else if (dims >= 4) {

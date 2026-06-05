@@ -91,7 +91,7 @@ set(MAIN_SRC "${PROJECT_SOURCE_DIR}/WebApps/InferenceServer/src/main.cpp"
         WebApps/InferenceServer/include/FeatureExtractionPostprocessor.h)
 
 # 如果主程序文件不存在，创建一个
-if(NOT EXISTS ${MAIN_SRC})
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/WebApps/InferenceServer/src/main.cpp")
     file(WRITE ${MAIN_SRC}
 "#include \"../include/InferenceServer.h\"
 #include <iostream>
