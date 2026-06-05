@@ -1,6 +1,6 @@
 # Kama-HTTPServer
 
-基于 muduo 的高性能 C++17 AI 推理服务平台。支持 ONNX Runtime (CPU) 和 TensorRT (GPU)，多模型热加载，分类/检测/分割多任务类型。
+基于 muduo 的高性能 C++17 AI 推理服务平台。支持 ONNX Runtime (CPU) 和 TensorRT (GPU)，多模型热加载，分类/检测/分割/特征提取多任务类型。
 
 **特性：** 事件驱动架构 · 插件式 Backend · 多模型多任务 · 热加载/热卸载 · 请求级动态批处理 · Prometheus 指标 · 结构化访问日志 · 优雅关闭 · Redis/内存双模式会话
 
@@ -86,11 +86,12 @@ curl -s -X POST http://localhost/predict -H 'Content-Type: application/json' -d 
         v                               v
 +----------------------+    +--------------------------+
 | InferenceServer      |    | HttpServer 框架层         |
-| - ResNet50Engine     |    | - Router (精确+正则匹配)  |
-| - ResNet50TRTEngine  |    | - MiddlewareChain        |
+| - OnnxBackend        |    | - Router (精确+正则匹配)  |
+| - TRTBackend         |    | - MiddlewareChain        |
 | - ModelFactory       |    | - SessionManager         |
-| - RequestBatcher     |    | - DbConnectionPool       |
-| - 17 个 Handler      |    | - MetricsCollector       |
+| - ModelPipeline      |    | - DbConnectionPool       |
+| - RequestBatcher     |    | - MetricsCollector       |
+| - 16 个 Handler      |    +--------------------------+
 +----------+-----------+    +--------------------------+
            │
            v
@@ -127,8 +128,8 @@ curl -s -X POST http://localhost/predict -H 'Content-Type: application/json' -d 
 | POST | `/models/delete` | 是 | 删除模型文件 |
 | GET | `/models/available` | 是 | 列出 models 目录文件 |
 | GET | `/models/labels` | 是 | 列出标签文件 |
-| POST | `/models/convert` | 是 | ONNX → TensorRT 转换 (GPU only) |
-| GET | `/models/convert/status` | 是 | 查看转换进度 |
+| POST | `/models/convert` | — | ONNX → TensorRT 转换 (GPU only) |
+| GET | `/models/convert/status` | — | 查看转换进度 |
 | GET | `/metrics` | — | Prometheus 指标 |
 | GET | `/metrics/json` | — | JSON 指标 |
 | GET | `/health` | — | 存活检查 |
@@ -141,7 +142,7 @@ curl -s -X POST http://localhost/predict -H 'Content-Type: application/json' -d 
 
 #### 推理 — `POST /predict`
 
-支持分类和检测两种任务类型。`model_name` 从 `GET /models` 获取。
+支持分类、检测、分割、特征提取四种任务类型。`model_name` 从 `GET /models` 获取。
 
 ```bash
 # 图片 base64 较大时，先写入文件再发送（避免 bash 参数上限）
@@ -301,7 +302,7 @@ curl -X POST http://localhost/predict \
 ```json
 {
   "server": { "port": 80, "threads": 4, "log_level": "WARN", "shutdown_timeout_ms": 30000 },
-  "logging": { "level": "INFO", "file": "server.log", "access_log": "access.log" },
+  "logging": { "level": "INFO", "file": "server.log" },
   "mysql": { "host": "tcp://mysql:3306", "user": "root", "password": "root", "database": "inference_platform", "pool_size": 10 },
   "redis": { "host": "redis", "port": 6379, "pool_size": 5 },
   "models": { "labels_path": "/app/models/imagenet_classes.txt", "engines": { "resnet50": { "type": "onnx", "path": "/app/models/resnet50_classification.onnx" } } },
