@@ -82,9 +82,12 @@ public:
 
     void setContentLength(uint64_t length)
     { contentLength_ = length; }
-    
+
     uint64_t contentLength() const
     { return contentLength_; }
+
+    void setBodyTooLarge(bool v) { bodyTooLarge_ = v; }
+    bool bodyTooLarge() const { return bodyTooLarge_; }
 
     void swap(HttpRequest& that);
 
@@ -98,6 +101,7 @@ private:
     std::map<std::string, std::string>           headers_; // 请求头
     std::string                                  content_; // 请求体
     uint64_t                                     contentLength_ { 0 }; // 请求体长度
-};  
+    bool                                         bodyTooLarge_ { false };
+};
 
 } // namespace http

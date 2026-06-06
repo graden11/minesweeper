@@ -99,7 +99,8 @@ private:
     // 获取当前在线人数
     int getCurOnline() const
     {
-        return onlineUsers_.size();
+        std::lock_guard<std::mutex> lock(mutexForOnlineUsers_);
+        return static_cast<int>(onlineUsers_.size());
     }
 
     void updateMaxOnline(int online)
@@ -139,7 +140,7 @@ private:
     http::MysqlUtil                                  mysqlUtil_;
     // userId -> 是否在线
     std::unordered_map<int, bool>                    onlineUsers_;
-    std::mutex                                       mutexForOnlineUsers_;
+    mutable std::mutex                               mutexForOnlineUsers_;
     // userId -> sessionId（踢人下线用）
     std::unordered_map<int, std::string>             loginSessions_;
     std::mutex                                       mutexForLoginSessions_;

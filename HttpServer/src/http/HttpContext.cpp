@@ -49,13 +49,21 @@ bool HttpContext::parseRequest(Buffer *buf, Timestamp receiveTime)
                 { 
                     // 空行，结束Header
                     // 根据请求方法和Content-Length判断是否需要继续读取body
-                    if (request_.method() == HttpRequest::kPost || 
+                    if (request_.method() == HttpRequest::kPost ||
                         request_.method() == HttpRequest::kPut)
                     {
                         std::string contentLength = request_.getHeader("Content-Length");
                         if (!contentLength.empty())
                         {
-                            request_.setContentLength(std::stoi(contentLength));
+                            auto cl = std::stoul(contentLength);
+                            if (cl > maxBodySize_)
+                            {
+                                request_.setBodyTooLarge(true);
+                                state_ = kGotAll;
+                                hasMore = false;
+                                break;
+                            }
+                            request_.setContentLength(static_cast<int64_t>(cl));
                             if (request_.contentLength() > 0)
                             {
                                 state_ = kExpectBody;

@@ -36,16 +36,18 @@ void DbConnectionPool::init(const std::string& host,
     LOG_INFO << "Database connection pool initialized with " << poolSize << " connections";
 }
 
-DbConnectionPool::DbConnectionPool() 
+DbConnectionPool::DbConnectionPool()
 {
     checkThread_ = std::thread(&DbConnectionPool::checkConnections, this);
-    checkThread_.detach();
 }
 
-DbConnectionPool::~DbConnectionPool() 
+DbConnectionPool::~DbConnectionPool()
 {
+    running_ = false;
+    if (checkThread_.joinable())
+        checkThread_.join();
     std::lock_guard<std::mutex> lock(mutex_);
-    while (!connections_.empty()) 
+    while (!connections_.empty())
     {
         connections_.pop();
     }
@@ -89,13 +91,17 @@ std::shared_ptr<DbConnection> DbConnectionPool::getConnection()
                 cv_.notify_one();
             });
     } 
-    catch (const std::exception& e) 
+    catch (const std::exception& e)
     {
         LOG_ERROR << "Failed to get connection: " << e.what();
-        {
+        // Don't return broken connections to pool — replace with a fresh one
+        try {
+            auto fresh = createConnection();
             std::lock_guard<std::mutex> lock(mutex_);
-            connections_.push(conn);
+            connections_.push(fresh);
             cv_.notify_one();
+        } catch (const std::exception& re) {
+            LOG_ERROR << "Failed to create replacement connection: " << re.what();
         }
         throw;
     }
@@ -107,23 +113,26 @@ std::shared_ptr<DbConnection> DbConnectionPool::createConnection()
 }
 
 // 修改检查连接的函数
-void DbConnectionPool::checkConnections() 
+void DbConnectionPool::checkConnections()
 {
-    while (true) 
+    while (running_)
     {
         try 
         {
             std::vector<std::shared_ptr<DbConnection>> connsToCheck;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
-                if (connections_.empty()) 
+                if (connections_.empty())
                 {
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    lock.unlock();
+                    for (int i = 0; i < 60 && running_; ++i)
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
                     continue;
                 }
-                
+
+                // Copy queue without draining
                 auto temp = connections_;
-                while (!temp.empty()) 
+                while (!temp.empty())
                 {
                     connsToCheck.push_back(temp.front());
                     temp.pop();

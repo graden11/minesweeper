@@ -22,7 +22,7 @@ FROM ubuntu:22.04
 
 # Install runtime dependencies (incl libstdc++ from builder for GLIBCXX_3.4.30)
 RUN apt-get update && apt-get install -y \
-    libmysqlcppconn7v5 libssl3 libprotobuf23 libfmt8 libhiredis0.14 \
+    libmysqlcppconn7v5 libssl3 libprotobuf23 libfmt8 libhiredis0.14 curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy runtime libs from builder stage (matching compiler version)
@@ -50,7 +50,14 @@ RUN sed -i 's|/project/WebApps/InferenceServer/models/|models/|g' /app/config.js
 COPY docker-entrypoint.sh /app/
 RUN chmod +x /app/docker-entrypoint.sh
 
+# Non-root user
+RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app /WebApps/InferenceServer/resource /usr/local/lib
+USER appuser
+
 WORKDIR /app
 EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:80/health || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

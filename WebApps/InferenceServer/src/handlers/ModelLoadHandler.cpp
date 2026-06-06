@@ -6,9 +6,14 @@
 #include "../../include/OnnxBackend.h"
 #include "../../include/Preprocessor.h"
 #include "../../include/Postprocessor.h"
+#include "../../../../HttpServer/include/utils/PathValidator.h"
 
 #include <muduo/base/Logging.h>
 #include <fstream>
+
+namespace {
+const std::string kModelDir = "models";
+}
 
 void ModelLoadHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
@@ -80,7 +85,20 @@ void ModelLoadHandler::handle(const http::HttpRequest& req, http::HttpResponse* 
             return;
         }
 
-        // Check file exists
+        // Check file exists and path is safe
+        if (!http::utils::isPathSafeInDir(path, kModelDir))
+        {
+            json err;
+            err["status"] = "error";
+            err["message"] = "model path is outside allowed directory";
+            std::string errBody = err.dump();
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
+            resp->setContentType("application/json");
+            resp->setContentLength(errBody.size());
+            resp->setBody(errBody);
+            resp->setCloseConnection(false);
+            return;
+        }
         if (!std::ifstream(path).good())
         {
             json err;

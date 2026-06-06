@@ -1,11 +1,19 @@
 #include "../../include/handlers/ConvertHandler.h"
 #include "../../include/InferenceServer.h"
 #include "../../include/ConversionManager.h"
+#include "../../../../HttpServer/include/utils/PathValidator.h"
 #include <fstream>
 #include <muduo/base/Logging.h>
 
+namespace {
+const std::string kModelDir = "models";
+}
+
 void ConvertHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
+    if (!server_->ensureAuthenticated(req, resp))
+        return;
+
     if (req.path() == "/models/convert" && req.method() == http::HttpRequest::kPost)
         handleConvert(req, resp);
     else
@@ -30,6 +38,33 @@ void ConvertHandler::handleConvert(const http::HttpRequest& req, http::HttpRespo
             json err;
             err["status"] = "error";
             err["message"] = "onnx_path and engine_path are required";
+            std::string body = err.dump();
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
+            resp->setContentType("application/json");
+            resp->setContentLength(body.size());
+            resp->setBody(body);
+            resp->setCloseConnection(false);
+            return;
+        }
+        // Path traversal check: restrict to models/ directory
+        if (!http::utils::isPathSafeInDir(opts.onnxPath, kModelDir))
+        {
+            json err;
+            err["status"] = "error";
+            err["message"] = "onnx_path is outside allowed directory";
+            std::string body = err.dump();
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
+            resp->setContentType("application/json");
+            resp->setContentLength(body.size());
+            resp->setBody(body);
+            resp->setCloseConnection(false);
+            return;
+        }
+        if (!http::utils::isPathSafeInDir(opts.enginePath, kModelDir))
+        {
+            json err;
+            err["status"] = "error";
+            err["message"] = "engine_path is outside allowed directory";
             std::string body = err.dump();
             resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
             resp->setContentType("application/json");

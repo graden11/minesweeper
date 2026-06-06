@@ -499,24 +499,14 @@ void InferenceServer::cleanupStaleSessions()
     if (!sm) return;
 
     std::vector<int> staleUsers;
-    {
-        std::lock_guard<std::mutex> lock(mutexForLoginSessions_);
-        for (auto it = loginSessions_.begin(); it != loginSessions_.end(); ) {
-            // 尝试从 session 存储加载会话，如果返回 null 或者过期，说明已失效
-            // 由于 SM 没有公共的 load 方法，我们通过 onlineUsers_ 间接判断：
-            // 会话过期后下次请求会创建新的，但 map 里 userId 只要登录过就是 true
-            // 真正的判断：检查 session 是否存在且未过期
-            // 暂时用一个简单方案：保留原逻辑，改为 30s 定时清理
-            ++it;
-        }
-    }
 
-    // 获取所有 session id，检查哪些已过期
+    // Always lock onlineUsers_ first, then loginSessions_ (avoids ABBA deadlock with LoginHandler)
     auto sessionIds = sm->getActiveSessionIds();
     std::unordered_set<std::string> active(sessionIds.begin(), sessionIds.end());
 
     {
-        std::lock_guard<std::mutex> lock(mutexForLoginSessions_);
+        std::lock_guard<std::mutex> lock1(mutexForOnlineUsers_);
+        std::lock_guard<std::mutex> lock2(mutexForLoginSessions_);
         for (auto it = loginSessions_.begin(); it != loginSessions_.end(); ) {
             if (active.find(it->second) == active.end()) {
                 int uid = it->first;
@@ -527,10 +517,6 @@ void InferenceServer::cleanupStaleSessions()
                 ++it;
             }
         }
-    }
-
-    if (!staleUsers.empty()) {
-        std::lock_guard<std::mutex> lock(mutexForOnlineUsers_);
         for (int uid : staleUsers) {
             onlineUsers_.erase(uid);
         }

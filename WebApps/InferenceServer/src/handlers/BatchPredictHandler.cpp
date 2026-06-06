@@ -5,12 +5,15 @@
 #include <muduo/base/Logging.h>
 
 #include "../../../../HttpServer/include/utils/JsonUtil.h"
+#include "../../../../HttpServer/include/utils/PathValidator.h"
 
 #include <fstream>
 #include <vector>
 
 namespace
 {
+
+const std::vector<std::string> kAllowedReadDirs = {"models", "images"};
 
 std::vector<uint8_t> base64Decode(const std::string &encoded)
 {
@@ -115,11 +118,18 @@ void BatchPredictHandler::handle(const http::HttpRequest &req, http::HttpRespons
 
             for (auto &p : paths)
             {
-                auto data = readFile(p.get<std::string>());
+                std::string pathStr = p.get<std::string>();
+                if (!http::utils::isPathSafeInDirs(pathStr, kAllowedReadDirs))
+                {
+                    sendError(req, resp, http::HttpResponse::k400BadRequest,
+                              "image_path is outside allowed directories: " + pathStr);
+                    return;
+                }
+                auto data = readFile(pathStr);
                 if (data.empty())
                 {
                     sendError(req, resp, http::HttpResponse::k400BadRequest,
-                              "failed to read image: " + p.get<std::string>());
+                              "failed to read image: " + pathStr);
                     return;
                 }
                 imageBytes.push_back(std::move(data));
@@ -192,5 +202,17 @@ void BatchPredictHandler::handle(const http::HttpRequest &req, http::HttpRespons
         LOG_ERROR << "BatchPredictHandler JSON parse error: " << e.what();
         sendError(req, resp, http::HttpResponse::k400BadRequest,
                   std::string("invalid JSON: ") + e.what());
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR << "BatchPredictHandler error: " << e.what();
+        sendError(req, resp, http::HttpResponse::k500InternalServerError,
+                  std::string("internal error: ") + e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR << "BatchPredictHandler unknown error";
+        sendError(req, resp, http::HttpResponse::k500InternalServerError,
+                  "internal error");
     }
 }

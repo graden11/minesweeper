@@ -3,6 +3,8 @@
 #include "../../include/InferenceEngine.h"
 #include "../../include/RequestBatcher.h"
 
+#include "../../../../HttpServer/include/utils/PathValidator.h"
+
 #include <muduo/base/Logging.h>
 
 #include <fstream>
@@ -10,6 +12,8 @@
 
 namespace
 {
+
+const std::vector<std::string> kAllowedReadDirs = {"models", "images"};
 
 std::vector<uint8_t> base64Decode(const std::string &encoded)
 {
@@ -49,6 +53,22 @@ std::vector<uint8_t> readFile(const std::string &path)
     return data;
 }
 
+void sendPredictError(const http::HttpRequest &req, http::HttpResponse *resp,
+                      http::HttpResponse::HttpStatusCode code,
+                      const std::string &message)
+{
+    json err;
+    err["status"] = "error";
+    err["message"] = message;
+    std::string errBody = err.dump();
+    resp->setStatusLine(req.getVersion(), code,
+        code == http::HttpResponse::k400BadRequest ? "Bad Request" : "Internal Server Error");
+    resp->setContentType("application/json");
+    resp->setContentLength(errBody.size());
+    resp->setBody(errBody);
+    resp->setCloseConnection(code != http::HttpResponse::k200Ok);
+}
+
 } // anonymous namespace
 
 void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp)
@@ -62,15 +82,8 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
 
         if (!hasPath && !hasData)
         {
-            json err;
-            err["status"] = "error";
-            err["message"] = "missing image_path or image_data";
-            std::string errBody = err.dump();
-            resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
-            resp->setContentType("application/json");
-            resp->setContentLength(errBody.size());
-            resp->setBody(errBody);
-            resp->setCloseConnection(false);
+            sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                             "missing image_path or image_data");
             return;
         }
 
@@ -82,18 +95,18 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
             std::vector<uint8_t> imageBytes;
             if (hasPath)
             {
-                imageBytes = readFile(body["image_path"]);
+                std::string imagePath = body["image_path"];
+                if (!http::utils::isPathSafeInDirs(imagePath, kAllowedReadDirs))
+                {
+                    sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                     "image_path is outside allowed directories");
+                    return;
+                }
+                imageBytes = readFile(imagePath);
                 if (imageBytes.empty())
                 {
-                    json err;
-                    err["status"] = "error";
-                    err["message"] = "failed to read image file";
-                    std::string errBody = err.dump();
-                    resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
-                    resp->setContentType("application/json");
-                    resp->setContentLength(errBody.size());
-                    resp->setBody(errBody);
-                    resp->setCloseConnection(false);
+                    sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                     "failed to read image file");
                     return;
                 }
             }
@@ -117,15 +130,8 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
         auto engine = factory_->getModel(modelName);
         if (!engine)
         {
-            json err;
-            err["status"] = "error";
-            err["message"] = "unknown model: " + modelName;
-            std::string errBody = err.dump();
-            resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
-            resp->setContentType("application/json");
-            resp->setContentLength(errBody.size());
-            resp->setBody(errBody);
-            resp->setCloseConnection(false);
+            sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                             "unknown model: " + modelName);
             return;
         }
 
@@ -133,6 +139,12 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
         if (hasPath)
         {
             std::string imagePath = body["image_path"];
+            if (!http::utils::isPathSafeInDirs(imagePath, kAllowedReadDirs))
+            {
+                sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                 "image_path is outside allowed directories");
+                return;
+            }
             resultJson = engine->predict(imagePath);
         }
         else
@@ -151,14 +163,19 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
     catch (const json::exception &e)
     {
         LOG_ERROR << "PredictHandler JSON parse error: " << e.what();
-        json err;
-        err["status"] = "error";
-        err["message"] = std::string("invalid JSON: ") + e.what();
-        std::string errBody = err.dump();
-        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
-        resp->setContentType("application/json");
-        resp->setContentLength(errBody.size());
-        resp->setBody(errBody);
-        resp->setCloseConnection(false);
+        sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                         std::string("invalid JSON: ") + e.what());
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR << "PredictHandler error: " << e.what();
+        sendPredictError(req, resp, http::HttpResponse::k500InternalServerError,
+                         std::string("internal error: ") + e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR << "PredictHandler unknown error";
+        sendPredictError(req, resp, http::HttpResponse::k500InternalServerError,
+                         "internal error");
     }
 }

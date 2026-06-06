@@ -8,7 +8,7 @@ void LoginHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp
     auto contentType = req.getHeader("Content-Type");
     if (contentType.empty() || contentType != "application/json" || req.getBody().empty())
     {
-        LOG_INFO << "content" << req.getBody();
+        LOG_INFO << "Login rejected: invalid Content-Type or empty body";
         resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
         resp->setCloseConnection(true);
         resp->setContentType("application/json");

@@ -21,8 +21,10 @@ public:
     };
     
     HttpContext()
-    : state_(kExpectRequestLine)
+    : state_(kExpectRequestLine), maxBodySize_(10 * 1024 * 1024)  // 10 MB default
     {}
+
+    void setMaxBodySize(uint64_t bytes) { maxBodySize_ = bytes; }
 
     bool parseRequest(muduo::net::Buffer* buf, muduo::Timestamp receiveTime);
     bool gotAll() const 
@@ -46,6 +48,7 @@ private:
 private:
     HttpRequestParseState state_;
     HttpRequest           request_;
+    uint64_t              maxBodySize_ = 10 * 1024 * 1024;
 };
 
 } // namespace http

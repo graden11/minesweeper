@@ -3,41 +3,68 @@
 
 void RegisterHandler::handle(const http::HttpRequest& req, http::HttpResponse* resp)
 {
-    // 解析body(json格式)
-    json parsed = json::parse(req.getBody());
-    std::string username = parsed["username"];
-    std::string password = parsed["password"];
-
-    // 判断用户是否已经存在，如果存在则注册失败
-    int userId = insertUser(username, password);
-    if (userId != -1)
+    try
     {
-        // 插入成功
-        json successResp;
-        successResp["status"] = "success";
-        successResp["message"] = "Register successful";
-        successResp["userId"] = userId;
-        std::string successBody = successResp.dump(4);
+        // 解析body(json格式)
+        json parsed = json::parse(req.getBody());
+        std::string username = parsed["username"];
+        std::string password = parsed["password"];
 
-        resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
-        resp->setCloseConnection(false);
-        resp->setContentType("application/json");
-        resp->setContentLength(successBody.size());
-        resp->setBody(successBody);
+        // 判断用户是否已经存在，如果存在则注册失败
+        int userId = insertUser(username, password);
+        if (userId != -1)
+        {
+            // 插入成功
+            json successResp;
+            successResp["status"] = "success";
+            successResp["message"] = "Register successful";
+            successResp["userId"] = userId;
+            std::string successBody = successResp.dump(4);
+
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
+            resp->setCloseConnection(false);
+            resp->setContentType("application/json");
+            resp->setContentLength(successBody.size());
+            resp->setBody(successBody);
+        }
+        else
+        {
+            // 插入失败
+            json failureResp;
+            failureResp["status"] = "error";
+            failureResp["message"] = "username already exists";
+            std::string failureBody = failureResp.dump(4);
+
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k409Conflict, "Conflict");
+            resp->setCloseConnection(false);
+            resp->setContentType("application/json");
+            resp->setContentLength(failureBody.size());
+            resp->setBody(failureBody);
+        }
     }
-    else
+    catch (const json::exception& e)
     {
-        // 插入失败
-        json failureResp;
-        failureResp["status"] = "error";
-        failureResp["message"] = "username already exists";
-        std::string failureBody = failureResp.dump(4);
-
-        resp->setStatusLine(req.getVersion(), http::HttpResponse::k409Conflict, "Conflict");
-        resp->setCloseConnection(false);
+        json err;
+        err["status"] = "error";
+        err["message"] = std::string("invalid JSON: ") + e.what();
+        std::string body = err.dump();
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k400BadRequest, "Bad Request");
         resp->setContentType("application/json");
-        resp->setContentLength(failureBody.size());
-        resp->setBody(failureBody);
+        resp->setContentLength(body.size());
+        resp->setBody(body);
+        resp->setCloseConnection(false);
+    }
+    catch (const std::exception& e)
+    {
+        json err;
+        err["status"] = "error";
+        err["message"] = std::string("internal error: ") + e.what();
+        std::string body = err.dump();
+        resp->setStatusLine(req.getVersion(), http::HttpResponse::k500InternalServerError, "Internal Server Error");
+        resp->setContentType("application/json");
+        resp->setContentLength(body.size());
+        resp->setBody(body);
+        resp->setCloseConnection(true);
     }
 }
 

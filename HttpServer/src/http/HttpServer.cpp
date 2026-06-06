@@ -165,7 +165,16 @@ void HttpServer::onMessage(const muduo::net::TcpConnectionPtr &conn,
         // 如果buf缓冲区中解析出一个完整的数据包才封装响应报文
         if (context->gotAll())
         {
-            onRequest(conn, context->request());
+            const auto& req = context->request();
+            if (req.bodyTooLarge())
+            {
+                conn->send("HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\n\r\n");
+                conn->shutdown();
+            }
+            else
+            {
+                onRequest(conn, req);
+            }
             context->reset();
         }
     }
@@ -176,36 +185,51 @@ void HttpServer::onMessage(const muduo::net::TcpConnectionPtr &conn,
         conn->send("HTTP/1.1 400 Bad Request\r\n\r\n");
         conn->shutdown();
     }
+    catch (...)
+    {
+        LOG_ERROR << "Unknown exception in onMessage";
+        try {
+            conn->send("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+        } catch (...) {}
+        conn->shutdown();
+    }
 }
 
 void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpRequest &req)
 {
     inflightCount_.fetch_add(1);
-
-    const std::string &connection = req.getHeader("Connection");
-    bool close = ((connection == "close") ||
-                  (req.getVersion() == "HTTP/1.0" && connection != "Keep-Alive"));
-    if (shuttingDown_.load()) close = true;
-    HttpResponse response(close);
-    response.setRequestId(generateRequestId());
-    response.setClientIp(conn->peerAddress().toIp());
-
-    // 根据请求报文信息来封装响应报文对象
-    httpCallback_(req, &response); // 执行onHttpCallback函数
-
-    // 可以给response设置一个成员，判断是否请求的是文件，如果是文件设置为true，并且存在文件位置在这里send出去。
-    muduo::net::Buffer buf;
-    response.appendToBuffer(&buf);
-    // 打印完整的响应内容用于调试
-    LOG_INFO << "Sending response:\n" << buf.toStringPiece().as_string();
-
-    conn->send(&buf);
-    // 如果是短连接的话，返回响应报文后就断开连接
-    if (response.closeConnection())
+    try
     {
-        conn->shutdown();
-    }
+        const std::string &connection = req.getHeader("Connection");
+        bool close = ((connection == "close") ||
+                      (req.getVersion() == "HTTP/1.0" && connection != "Keep-Alive"));
+        if (shuttingDown_.load()) close = true;
+        HttpResponse response(close);
+        response.setRequestId(generateRequestId());
+        response.setClientIp(conn->peerAddress().toIp());
 
+        // 根据请求报文信息来封装响应报文对象
+        httpCallback_(req, &response); // 执行onHttpCallback函数
+
+        // 可以给response设置一个成员，判断是否请求的是文件，如果是文件设置为true，并且存在文件位置在这里send出去。
+        muduo::net::Buffer buf;
+        response.appendToBuffer(&buf);
+        // 打印完整的响应内容用于调试
+        LOG_INFO << "Sending response:\n" << buf.toStringPiece().as_string();
+
+        conn->send(&buf);
+        // 如果是短连接的话，返回响应报文后就断开连接
+        if (response.closeConnection())
+        {
+            conn->shutdown();
+        }
+    }
+    catch (...)
+    {
+        LOG_ERROR << "Unhandled exception in onRequest";
+        inflightCount_.fetch_sub(1);
+        throw;
+    }
     inflightCount_.fetch_sub(1);
 }
 
@@ -236,11 +260,16 @@ void HttpServer::handleRequest(const HttpRequest &req, HttpResponse *resp)
         // 处理中间件抛出的响应（如CORS预检请求）
         *resp = res;
     }
-    catch (const std::exception& e) 
+    catch (const std::exception& e)
     {
         // 错误处理
         resp->setStatusCode(HttpResponse::k500InternalServerError);
         resp->setBody(e.what());
+    }
+    catch (...)
+    {
+        resp->setStatusCode(HttpResponse::k500InternalServerError);
+        resp->setBody("Internal Server Error");
     }
 }
 

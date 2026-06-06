@@ -43,7 +43,7 @@ RUN rm -f /usr/lib/x86_64-linux-gnu/libnvinfer* \
           /usr/lib/x86_64-linux-gnu/libnvinfer_plugin*
 
 RUN apt-get update && apt-get install -y \
-    libmysqlcppconn7v5 libssl3 libprotobuf23 libfmt8 libhiredis0.14 \
+    libmysqlcppconn7v5 libssl3 libprotobuf23 libfmt8 libhiredis0.14 curl \
     && rm -rf /var/lib/apt/lists/*
 
 # TensorRT runtime libs (from builder, matches linked version)
@@ -75,6 +75,15 @@ RUN sed -i 's|../WebApps/InferenceServer/models/|models/|g; s|/project/WebApps/I
 COPY docker-entrypoint.sh /app/
 RUN chmod +x /app/docker-entrypoint.sh
 
+# Non-root user (GPU access requires the container to be launched with --gpus)
+RUN useradd -m -s /bin/bash appuser && \
+    chown -R appuser:appuser /app /WebApps/InferenceServer/resource /usr/local/lib
+USER appuser
+
 WORKDIR /app
 EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:80/health || exit 1
+
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

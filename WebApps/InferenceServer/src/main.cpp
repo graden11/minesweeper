@@ -73,6 +73,7 @@ int main(int argc, char* argv[])
   server.setThreadNum(cfg.server.threads);
 
   // Block signals in this thread; they will be handled by sigwait thread
+  signal(SIGPIPE, SIG_IGN);
   sigset_t sigset;
   sigemptyset(&sigset);
   sigaddset(&sigset, SIGINT);
