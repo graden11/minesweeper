@@ -24,6 +24,24 @@ struct EndpointMetrics {
     std::atomic<int64_t> bucket_inf{0};
 };
 
+struct ModelMetrics {
+    std::atomic<int64_t> count{0};
+    std::atomic<int64_t> latency_us_sum{0};
+    std::atomic<int64_t> latency_us_min{INT64_MAX};
+    std::atomic<int64_t> latency_us_max{0};
+    std::atomic<int64_t> bucket_1ms{0};
+    std::atomic<int64_t> bucket_5ms{0};
+    std::atomic<int64_t> bucket_10ms{0};
+    std::atomic<int64_t> bucket_25ms{0};
+    std::atomic<int64_t> bucket_50ms{0};
+    std::atomic<int64_t> bucket_100ms{0};
+    std::atomic<int64_t> bucket_250ms{0};
+    std::atomic<int64_t> bucket_500ms{0};
+    std::atomic<int64_t> bucket_1s{0};
+    std::atomic<int64_t> bucket_2_5s{0};
+    std::atomic<int64_t> bucket_inf{0};
+};
+
 class MetricsCollector
 {
 public:
@@ -34,6 +52,39 @@ public:
     }
 
     void setInflightSource(const std::atomic<int>* src) { inflightSrc_ = src; }
+
+    // Model-level inference latency (separate from HTTP-level metrics)
+    void recordModelLatency(const std::string& model, const std::string& taskType,
+                            int64_t latency_us, int batchSize = 1)
+    {
+        std::string key = model + ":" + taskType;
+        auto &m = getOrCreateModel(key);
+        m.count.fetch_add(batchSize, std::memory_order_relaxed);
+        m.latency_us_sum.fetch_add(latency_us, std::memory_order_relaxed);
+
+        int64_t oldMin = m.latency_us_min.load(std::memory_order_relaxed);
+        while (latency_us < oldMin &&
+               !m.latency_us_min.compare_exchange_weak(oldMin, latency_us, std::memory_order_relaxed))
+            ;
+        int64_t oldMax = m.latency_us_max.load(std::memory_order_relaxed);
+        while (latency_us > oldMax &&
+               !m.latency_us_max.compare_exchange_weak(oldMax, latency_us, std::memory_order_relaxed))
+            ;
+
+        // Inference-specific buckets: 1ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s
+        auto &b = (latency_us < 1000)     ? m.bucket_1ms :
+                  (latency_us < 5000)     ? m.bucket_5ms :
+                  (latency_us < 10000)    ? m.bucket_10ms :
+                  (latency_us < 25000)    ? m.bucket_25ms :
+                  (latency_us < 50000)    ? m.bucket_50ms :
+                  (latency_us < 100000)   ? m.bucket_100ms :
+                  (latency_us < 250000)   ? m.bucket_250ms :
+                  (latency_us < 500000)   ? m.bucket_500ms :
+                  (latency_us < 1000000)  ? m.bucket_1s :
+                  (latency_us < 2500000)  ? m.bucket_2_5s :
+                                            m.bucket_inf;
+        b.fetch_add(batchSize, std::memory_order_relaxed);
+    }
 
     void record(const std::string &endpoint, const std::string &method, int64_t latency_us, bool is_error)
     {
@@ -101,6 +152,40 @@ public:
             eps[name] = e;
         }
         j["endpoints"] = eps;
+
+        // Model inference metrics
+        nlohmann::json mods = nlohmann::json::object();
+        for (auto &[key, m] : modelMetrics_)
+        {
+            auto colonPos = key.find(':');
+            std::string model = (colonPos != std::string::npos) ? key.substr(0, colonPos) : key;
+            std::string task  = (colonPos != std::string::npos) ? key.substr(colonPos + 1) : "";
+            nlohmann::json mm;
+            mm["model"] = model;
+            mm["task"] = task;
+            mm["count"] = m.count.load(std::memory_order_relaxed);
+            int64_t c = m.count.load(std::memory_order_relaxed);
+            mm["avg_latency_us"] = c > 0 ? m.latency_us_sum.load(std::memory_order_relaxed) / c : 0;
+            int64_t minVal = m.latency_us_min.load(std::memory_order_relaxed);
+            mm["latency_us_min"] = (minVal == INT64_MAX) ? 0 : minVal;
+            mm["latency_us_max"] = m.latency_us_max.load(std::memory_order_relaxed);
+            mm["buckets"] = {
+                {"<1ms",    m.bucket_1ms.load(std::memory_order_relaxed)},
+                {"<5ms",    m.bucket_5ms.load(std::memory_order_relaxed)},
+                {"<10ms",   m.bucket_10ms.load(std::memory_order_relaxed)},
+                {"<25ms",   m.bucket_25ms.load(std::memory_order_relaxed)},
+                {"<50ms",   m.bucket_50ms.load(std::memory_order_relaxed)},
+                {"<100ms",  m.bucket_100ms.load(std::memory_order_relaxed)},
+                {"<250ms",  m.bucket_250ms.load(std::memory_order_relaxed)},
+                {"<500ms",  m.bucket_500ms.load(std::memory_order_relaxed)},
+                {"<1s",     m.bucket_1s.load(std::memory_order_relaxed)},
+                {"<2.5s",   m.bucket_2_5s.load(std::memory_order_relaxed)},
+                {">=2.5s",  m.bucket_inf.load(std::memory_order_relaxed)}
+            };
+            mods[key] = mm;
+        }
+        j["model_inference"] = mods;
+
         return j;
     }
 
@@ -199,8 +284,21 @@ private:
         return endpoints_[name];
     }
 
+    ModelMetrics &getOrCreateModel(const std::string &name)
+    {
+        {
+            std::shared_lock<std::shared_mutex> lock(mutex_);
+            auto it = modelMetrics_.find(name);
+            if (it != modelMetrics_.end())
+                return it->second;
+        }
+        std::unique_lock<std::shared_mutex> lock(mutex_);
+        return modelMetrics_[name];
+    }
+
     muduo::Timestamp startTime_;
     std::unordered_map<std::string, EndpointMetrics> endpoints_;
+    std::unordered_map<std::string, ModelMetrics> modelMetrics_;
     mutable std::shared_mutex mutex_;
     const std::atomic<int>* inflightSrc_ = nullptr;
 };

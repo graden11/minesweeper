@@ -27,7 +27,14 @@ inline void initSpdLog(const std::string &logPath = "server.log",
     auto logger = std::make_shared<spdlog::logger>("server",
         spdlog::sinks_init_list{consoleSink, fileSink});
     logger->set_level(lv);
-    logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] %v");
+
+    const char* logFormat = std::getenv("LOG_FORMAT");
+    if (logFormat && std::string(logFormat) == "json") {
+        logger->set_pattern(R"({"ts":"%Y-%m-%dT%H:%M:%S.%e","level":"%^%l%$","thread":%t,"msg":"%v"})");
+    } else {
+        logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] %v");
+    }
+
     logger->flush_on(spdlog::level::info);
     spdlog::set_default_logger(logger);
 

@@ -1,10 +1,12 @@
 #include "../include/ModelPipeline.h"
 
+#include <chrono>
 #include <fstream>
 #include <iterator>
 #include <muduo/base/Logging.h>
 
 #include "../../../HttpServer/include/utils/JsonUtil.h"
+#include "../../../HttpServer/include/utils/MetricsCollector.h"
 
 namespace inference {
 
@@ -90,7 +92,12 @@ nlohmann::json ModelPipeline::doPredictJson(const std::vector<uint8_t>& imageByt
              << inputShape[2] << "," << inputShape[3] << "]";
     InferenceOutput inferOut;
     try {
+        auto t0 = std::chrono::steady_clock::now();
         inferOut = backend_->inferMulti(input, inputShape);
+        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - t0).count();
+        MetricsCollector::instance().recordModelLatency(config_.name,
+            taskTypeToString(config_.task), elapsed, 1);
     } catch (const std::exception& e) {
         LOG_ERROR << "doPredictJson: infer threw exception: " << e.what();
         nlohmann::json err;
