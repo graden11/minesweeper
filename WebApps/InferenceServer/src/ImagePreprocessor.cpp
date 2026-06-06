@@ -45,7 +45,9 @@ std::vector<float> ImagePreprocessor::preprocess(const std::vector<uint8_t>& ima
     // uint8 srgb → uint8 linear resize via stb. Cannot eliminate this intermediate
     // buffer because stbir_resize_uint8_srgb outputs uint8 only; a direct
     // uint8→float resize with stbir_resize(generic) proved unreliable at value range.
-    std::vector<uint8_t> resized(targetH_ * targetW_ * targetC_);
+    // Thread-local: reused across calls on the same thread, avoiding 150KB malloc/free.
+    thread_local static std::vector<uint8_t> resized;
+    resized.resize(targetH_ * targetW_ * targetC_);
     stbir_resize_uint8_srgb(data, w, h, 0,
                             resized.data(), targetW_, targetH_, 0,
                             static_cast<stbir_pixel_layout>(targetC_));
