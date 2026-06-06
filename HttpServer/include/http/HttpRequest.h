@@ -77,7 +77,7 @@ public:
         }
     }
     
-    std::string getBody() const
+    const std::string& getBody() const
     { return content_; }
 
     void setContentLength(uint64_t length)

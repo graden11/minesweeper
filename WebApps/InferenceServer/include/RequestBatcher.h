@@ -30,8 +30,8 @@ public:
     void start();
     void stop();
 
-    std::future<std::string> submit(const std::string& modelName,
-                                    const std::vector<uint8_t>& imageData);
+    std::future<std::string> submit(std::string modelName,
+                                    std::vector<uint8_t> imageData);
 
 private:
     void workerLoop();

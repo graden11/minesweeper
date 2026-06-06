@@ -38,15 +38,15 @@ void RequestBatcher::stop()
     }
 }
 
-std::future<std::string> RequestBatcher::submit(const std::string& modelName,
-                                                 const std::vector<uint8_t>& imageData)
+std::future<std::string> RequestBatcher::submit(std::string modelName,
+                                                 std::vector<uint8_t> imageData)
 {
     auto promise = std::make_shared<std::promise<std::string>>();
     auto future = promise->get_future();
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        queue_.push_back({modelName, imageData, std::move(promise)});
+        queue_.push_back({std::move(modelName), std::move(imageData), std::move(promise)});
     }
     cv_.notify_one();
 

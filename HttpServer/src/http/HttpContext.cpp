@@ -109,9 +109,8 @@ bool HttpContext::parseRequest(Buffer *buf, Timestamp receiveTime)
                 return true;
             }
 
-            // 只读取 Content-Length 指定的长度
-            std::string body(buf->peek(), buf->peek() + request_.contentLength());
-            request_.setBody(body);
+            // 只读取 Content-Length 指定的长度（直接构造到 request 中，避免中间 string 拷贝）
+            request_.setBody(buf->peek(), buf->peek() + request_.contentLength());
 
             // 准确移动读指针
             buf->retrieve(request_.contentLength());

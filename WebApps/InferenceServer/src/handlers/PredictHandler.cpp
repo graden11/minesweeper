@@ -65,7 +65,7 @@ void sendPredictError(const http::HttpRequest &req, http::HttpResponse *resp,
         code == http::HttpResponse::k400BadRequest ? "Bad Request" : "Internal Server Error");
     resp->setContentType("application/json");
     resp->setContentLength(errBody.size());
-    resp->setBody(errBody);
+    resp->setBody(std::move(errBody));
     resp->setCloseConnection(code != http::HttpResponse::k200Ok);
 }
 
@@ -115,13 +115,13 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
                 imageBytes = base64Decode(body["image_data"]);
             }
 
-            auto future = batcher_->submit(modelName, imageBytes);
+            auto future = batcher_->submit(modelName, std::move(imageBytes));
             std::string resultJson = future.get();
 
             resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
             resp->setContentType("application/json");
             resp->setContentLength(resultJson.size());
-            resp->setBody(resultJson);
+            resp->setBody(std::move(resultJson));
             resp->setCloseConnection(false);
             return;
         }
@@ -157,7 +157,7 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
         resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
         resp->setContentType("application/json");
         resp->setContentLength(resultJson.size());
-        resp->setBody(resultJson);
+        resp->setBody(std::move(resultJson));
         resp->setCloseConnection(false);
     }
     catch (const json::exception &e)

@@ -57,7 +57,11 @@ public:
     void setBody(const std::string& body)
     {
         body_ = body;
-        // body_ += "\0";
+    }
+
+    void setBody(std::string&& body)
+    {
+        body_ = std::move(body);
     }
 
     void setRequestId(const std::string& id) { requestId_ = id; }
