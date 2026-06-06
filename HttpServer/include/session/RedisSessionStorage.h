@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SessionStorage.h"
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <hiredis/hiredis.h>
@@ -27,6 +28,8 @@ private:
     std::string host_;
     int port_;
     std::mutex redisMutex_;
+    int reconnectFailures_ = 0;
+    std::chrono::steady_clock::time_point lastReconnectAttempt_;
 
     void reconnect();
     std::string serialize(const Session& session) const;

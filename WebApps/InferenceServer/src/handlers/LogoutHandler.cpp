@@ -37,6 +37,7 @@ void LogoutHandler::handle(const http::HttpRequest &req, http::HttpResponse *res
 
         // 返回响应报文
         json response;
+        response["status"] = "ok";
         response["message"] = "logout successful";
         std::string responseBody = response.dump(4);
         resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");

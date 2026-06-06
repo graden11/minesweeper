@@ -370,14 +370,7 @@ void InferenceServer::initializeRouter()
                 resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
                 resp->setCloseConnection(false); return;
             }
-            if (!std::ifstream(targetPath).good()) {
-                json err; err["status"]="error"; err["message"]="file not found: "+filePath;
-                std::string b = err.dump();
-                resp->setStatusLine(req.getVersion(), http::HttpResponse::k404NotFound, "Not Found");
-                resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
-                resp->setCloseConnection(false); return;
-            }
-            // 检查文件是否正在被加载
+            // 检查文件是否正在被加载（在删除前检查，避免竞态）
             auto loaded = modelFactory_->listModels();
             std::string reqPathNorm = targetPath.string();
             for (auto& m : loaded) {
@@ -390,7 +383,14 @@ void InferenceServer::initializeRouter()
                     resp->setCloseConnection(false); return;
                 }
             }
-            fs::remove(targetPath);
+            std::error_code ec;
+            if (!fs::remove(targetPath, ec)) {
+                json err; err["status"]="error"; err["message"]="file not found: "+filePath;
+                std::string b = err.dump();
+                resp->setStatusLine(req.getVersion(), http::HttpResponse::k404NotFound, "Not Found");
+                resp->setContentType("application/json"); resp->setContentLength(b.size()); resp->setBody(b);
+                resp->setCloseConnection(false); return;
+            }
             json ok; ok["status"]="ok"; ok["message"]="deleted: "+filePath;
             std::string b = ok.dump();
             resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -136,9 +137,23 @@ inline AppConfig loadConfig(const std::string &filePath)
     if (j.contains("server"))
     {
         auto &s = j["server"];
-        if (s.contains("port"))     cfg.server.port = s["port"].get<int>();
+        if (s.contains("port")) {
+            int p = s["port"].get<int>();
+            if (p < 1 || p > 65535) {
+                std::cerr << "Invalid server.port: " << p << " (must be 1-65535)" << std::endl;
+                std::exit(1);
+            }
+            cfg.server.port = p;
+        }
         if (s.contains("name"))     cfg.server.name = s["name"].get<std::string>();
-        if (s.contains("threads"))  cfg.server.threads = s["threads"].get<int>();
+        if (s.contains("threads")) {
+            int t = s["threads"].get<int>();
+            if (t < 1) {
+                std::cerr << "Invalid server.threads: " << t << " (must be >= 1)" << std::endl;
+                std::exit(1);
+            }
+            cfg.server.threads = t;
+        }
         if (s.contains("log_level")) cfg.server.log_level = s["log_level"].get<std::string>();
         if (s.contains("shutdown_timeout_ms")) cfg.server.shutdown_timeout_ms = s["shutdown_timeout_ms"].get<int>();
     }
@@ -239,8 +254,22 @@ inline AppConfig loadConfig(const std::string &filePath)
     {
         auto &b = j["batching"];
         if (b.contains("enabled"))         cfg.batching.enabled = b["enabled"].get<bool>();
-        if (b.contains("max_batch_size"))  cfg.batching.max_batch_size = b["max_batch_size"].get<int>();
-        if (b.contains("max_delay_ms"))    cfg.batching.max_delay_ms = b["max_delay_ms"].get<int>();
+        if (b.contains("max_batch_size")) {
+            int bs = b["max_batch_size"].get<int>();
+            if (bs < 1) {
+                std::cerr << "Invalid batching.max_batch_size: " << bs << " (must be >= 1)" << std::endl;
+                std::exit(1);
+            }
+            cfg.batching.max_batch_size = bs;
+        }
+        if (b.contains("max_delay_ms")) {
+            int dm = b["max_delay_ms"].get<int>();
+            if (dm < 1) {
+                std::cerr << "Invalid batching.max_delay_ms: " << dm << " (must be >= 1)" << std::endl;
+                std::exit(1);
+            }
+            cfg.batching.max_delay_ms = dm;
+        }
     }
 
     // Dynamic engines (persisted by /models/load API)

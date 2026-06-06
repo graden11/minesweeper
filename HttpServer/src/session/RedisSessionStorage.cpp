@@ -24,12 +24,31 @@ RedisSessionStorage::~RedisSessionStorage()
 
 void RedisSessionStorage::reconnect()
 {
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s between attempts
+    static constexpr auto kMinBackoff = std::chrono::seconds(1);
+    static constexpr auto kMaxBackoff = std::chrono::seconds(30);
+
+    auto now = std::chrono::steady_clock::now();
+    if (reconnectFailures_ > 0) {
+        auto delay = std::min(kMinBackoff * (1 << (reconnectFailures_ - 1)), kMaxBackoff);
+        if (now - lastReconnectAttempt_ < delay)
+            return; // Not yet due for a retry
+    }
+
+    lastReconnectAttempt_ = now;
     if (ctx_) redisFree(ctx_);
     ctx_ = redisConnect(host_.c_str(), port_);
     if (ctx_ && ctx_->err) {
         LOG_ERROR << "Redis reconnect failed: " << ctx_->errstr;
         redisFree(ctx_);
         ctx_ = nullptr;
+        reconnectFailures_++;
+    } else if (ctx_) {
+        if (reconnectFailures_ > 0)
+            LOG_INFO << "Redis reconnected after " << reconnectFailures_ << " failures";
+        reconnectFailures_ = 0;
+    } else {
+        reconnectFailures_++;
     }
 }
 

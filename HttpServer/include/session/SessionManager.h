@@ -4,7 +4,6 @@
 #include "../http/HttpRequest.h"
 #include "../http/HttpResponse.h"
 #include <memory>
-#include <random>
 
 namespace http
 {
@@ -40,7 +39,6 @@ private:
 
 private:
     std::unique_ptr<SessionStorage> storage_;
-    std::mt19937 rng_; // 用于生成随机会话id
 };
 
 } // namespace session

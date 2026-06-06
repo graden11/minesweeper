@@ -62,7 +62,7 @@ void LoginHandler::handle(const http::HttpRequest &req, http::HttpResponse *resp
             server_->updateMaxOnline(onlineCount);
 
             json successResp;
-            successResp["success"] = true;
+            successResp["status"] = "ok";
             successResp["userId"] = userId;
             std::string successBody = successResp.dump(4);
 

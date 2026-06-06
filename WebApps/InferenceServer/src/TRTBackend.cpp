@@ -37,15 +37,13 @@ TRTBackend::TRTBackend(const ModelConfig& config)
 {
     if (!initCuda())
     {
-        LOG_ERROR << "CUDA initialization failed";
-        return;
+        throw std::runtime_error("CUDA initialization failed");
     }
 
     if (!loadEngine(config.path))
     {
-        LOG_ERROR << "Failed to load TensorRT engine: " << config.path
-                  << " — use POST /models/convert to build from ONNX first";
-        return;
+        throw std::runtime_error("Failed to load TensorRT engine: " + config.path
+                                 + " -- use POST /models/convert to build from ONNX first");
     }
 
     // Create CUDA stream for async execution
