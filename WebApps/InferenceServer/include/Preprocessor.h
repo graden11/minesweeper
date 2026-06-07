@@ -16,9 +16,23 @@ public:
     virtual ~Preprocessor() = default;
 
     /// Decode and preprocess in-memory image bytes, filling a caller-owned buffer.
-    /// Returns false on decode failure. Overrides the pure virtual below.
+    /// Returns false on decode failure.
     virtual bool preprocess(const std::vector<uint8_t>& imageBytes,
                             std::vector<float>& output) = 0;
+
+    /// Decode and preprocess, writing into batchOutput starting at the given
+    /// float offset.  output.size() must be >= offset + elemCount.
+    /// Default implementation calls preprocess()+copy; subclasses may fuse.
+    virtual bool preprocessInto(const std::vector<uint8_t>& imageBytes,
+                                std::vector<float>& batchOutput,
+                                size_t offset)
+    {
+        thread_local std::vector<float> tmp;
+        if (!preprocess(imageBytes, tmp))
+            return false;
+        std::copy(tmp.begin(), tmp.end(), batchOutput.begin() + offset);
+        return true;
+    }
 
     /// Decode and preprocess in-memory image bytes → CHW float tensor.
     /// Convenience wrapper that allocates, kept for external callers.

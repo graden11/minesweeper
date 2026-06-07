@@ -174,23 +174,16 @@ std::vector<std::string> ModelPipeline::predictBatch(
     if (batchSize == 0)
         return {};
 
-    // 1. Preprocess all images, concatenate into one NCHW tensor
+    // 1. Preprocess all images, writing directly into batch buffer at offset
     int perSampleElems = config_.input.elemCount();
     thread_local std::vector<float> batchInput;
-    batchInput.clear();
-    batchInput.reserve(batchSize * perSampleElems);
+    batchInput.assign(batchSize * perSampleElems, 0.0f);
 
-    thread_local std::vector<float> t_singleInput;
-    for (auto& img : images)
+    for (size_t i = 0; i < images.size(); ++i)
     {
-        if (!preprocessor_->preprocess(img, t_singleInput))
+        if (!preprocessor_->preprocessInto(images[i], batchInput, i * perSampleElems))
         {
-            LOG_ERROR << "predictBatch: failed to decode image, zero-filling";
-            batchInput.insert(batchInput.end(), perSampleElems, 0.0f);
-        }
-        else
-        {
-            batchInput.insert(batchInput.end(), t_singleInput.begin(), t_singleInput.end());
+            LOG_ERROR << "predictBatch: failed to decode image " << i << ", zero-filling";
         }
     }
 

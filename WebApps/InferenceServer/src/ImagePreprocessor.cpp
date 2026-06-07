@@ -96,4 +96,70 @@ bool ImagePreprocessor::preprocess(const std::vector<uint8_t>& imageBytes,
     return true;
 }
 
+bool ImagePreprocessor::preprocessInto(const std::vector<uint8_t>& imageBytes,
+                                       std::vector<float>& batchOutput,
+                                       size_t offset)
+{
+    // Same decode+resize+normalize but writes directly into batchOutput[offset..]
+    int w, h, channels;
+    unsigned char* data = stbi_load_from_memory(
+        imageBytes.data(), static_cast<int>(imageBytes.size()),
+        &w, &h, &channels, targetC_);
+    if (!data)
+    {
+        LOG_ERROR << "ImagePreprocessor: failed to decode image";
+        return false;
+    }
+
+    const int elemCount = targetC_ * targetH_ * targetW_;
+
+    thread_local static std::vector<uint8_t> resized;
+    resized.resize(targetH_ * targetW_ * targetC_);
+    stbir_resize_uint8_srgb(data, w, h, 0,
+                            resized.data(), targetW_, targetH_, 0,
+                            static_cast<stbir_pixel_layout>(targetC_));
+    stbi_image_free(data);
+
+    // batchOutput is already resized to hold the full batch.
+    // Write this sample's normalized tensor directly at batchOutput[offset..].
+    float* out = batchOutput.data() + offset;
+
+    if (hwcLayout_) {
+        if (targetC_ == 3) {
+            for (int i = 0; i < elemCount; i += 3) {
+                out[i]     = resized[i]     * scale_[0] + bias_[0];
+                out[i + 1] = resized[i + 1] * scale_[1] + bias_[1];
+                out[i + 2] = resized[i + 2] * scale_[2] + bias_[2];
+            }
+        } else {
+            for (int i = 0; i < elemCount; ++i) {
+                int c = i % targetC_;
+                out[i] = resized[i] * scale_[c] + bias_[c];
+            }
+        }
+    } else {
+        if (targetC_ == 3) {
+            float* c0 = out;
+            float* c1 = c0 + targetH_ * targetW_;
+            float* c2 = c1 + targetH_ * targetW_;
+            for (int i = 0, p = 0; i < targetH_ * targetW_; ++i, p += 3) {
+                c0[i] = resized[p]     * scale_[0] + bias_[0];
+                c1[i] = resized[p + 1] * scale_[1] + bias_[1];
+                c2[i] = resized[p + 2] * scale_[2] + bias_[2];
+            }
+        } else {
+            for (int y = 0; y < targetH_; ++y) {
+                for (int x = 0; x < targetW_; ++x) {
+                    int hwcBase = (y * targetW_ + x) * targetC_;
+                    for (int c = 0; c < targetC_; ++c) {
+                        int chwIdx = (c * targetH_ + y) * targetW_ + x;
+                        out[chwIdx] = resized[hwcBase + c] * scale_[c] + bias_[c];
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
 } // namespace inference

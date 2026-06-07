@@ -14,6 +14,11 @@ public:
     bool preprocess(const std::vector<uint8_t>& imageBytes,
                     std::vector<float>& output) override;
 
+    /// Fused: decode + resize + normalize into batchOutput at the given float offset.
+    bool preprocessInto(const std::vector<uint8_t>& imageBytes,
+                        std::vector<float>& batchOutput,
+                        size_t offset) override;
+
 private:
     int targetW_, targetH_, targetC_;
     bool hwcLayout_;
