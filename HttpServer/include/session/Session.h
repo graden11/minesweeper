@@ -17,17 +17,17 @@ class Session : public std::enable_shared_from_this<Session>
 {
 public:
     Session(const std::string& sessionId, SessionManager* sessionManager, int maxAge = 3600); // 默认1小时过期
-    
-    const std::string& getId() const 
+
+    const std::string& getId() const
     { return sessionId_; }
 
     bool isExpired() const;
     void refresh(); // 刷新过期时间
 
-    void setManager(SessionManager* sessionManager) 
+    void setManager(SessionManager* sessionManager)
     { sessionManager_ = sessionManager; }
 
-    SessionManager* getManager() const 
+    SessionManager* getManager() const
     { return sessionManager_; }
 
     // 数据存取
@@ -36,12 +36,18 @@ public:
     const std::unordered_map<std::string, std::string>& getData() const { return data_; }
     void remove(const std::string&key);
     void clear();
+
+    /// True when setValue() has been called since the last persist.
+    bool isDirty() const { return dirty_; }
+    void clearDirty() { dirty_ = false; }
+
 private:
     std::string                                  sessionId_;
     std::unordered_map<std::string, std::string> data_;
     std::chrono::system_clock::time_point        expiryTime_;
     int                                          maxAge_; // 过期时间（秒）
     SessionManager*                              sessionManager_;
+    bool                                         dirty_ = false;
 };
 
 } // namespace session

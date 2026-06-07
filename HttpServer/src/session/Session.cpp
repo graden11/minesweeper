@@ -31,10 +31,12 @@ void Session::refresh()
 void Session::setValue(const std::string& key, const std::string& value)
 {
     data_[key] = value;
+    dirty_ = true;
     // 如果设置了manager，自动保存更改
     if (sessionManager_)
     {
         sessionManager_->updateSession(shared_from_this());
+        dirty_ = false;  // persist already done by updateSession
     }
 }
 

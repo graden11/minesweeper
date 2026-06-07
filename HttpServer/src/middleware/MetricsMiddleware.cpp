@@ -4,8 +4,6 @@
 
 #include <muduo/base/Timestamp.h>
 
-#include <nlohmann/json.hpp>
-
 namespace http {
 namespace middleware {
 
@@ -34,16 +32,13 @@ void MetricsMiddleware::after(HttpResponse &response)
 
     MetricsCollector::instance().record(t_path, t_method, latency_us, is_error);
 
-    // Structured JSON access log
-    nlohmann::json entry;
-    entry["request_id"] = response.getRequestId();
-    entry["method"] = t_method;
-    entry["path"] = t_path;
-    entry["status"] = static_cast<int>(response.getStatusCode());
-    entry["latency_ms"] = latency_us / 1000.0;
-    entry["client_ip"] = response.getClientIp();
-
-    LOG_ACCESS(entry.dump());
+    // Structured JSON access log — fmt::format via spdlog avoids nlohmann::json
+    // object construction + dump() per request on the hot path.
+    LOG_ACCESS(
+        R"({{"request_id":"{}","method":"{}","path":"{}","status":{},"latency_ms":{:.1f},"client_ip":"{}"}})",
+        response.getRequestId(), t_method, t_path,
+        static_cast<int>(response.getStatusCode()),
+        latency_us / 1000.0, response.getClientIp());
 
     t_start = muduo::Timestamp();  // invalidate
 }

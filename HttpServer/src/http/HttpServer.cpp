@@ -229,8 +229,9 @@ void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpR
         // 可以给response设置一个成员，判断是否请求的是文件，如果是文件设置为true，并且存在文件位置在这里send出去。
         muduo::net::Buffer buf;
         response.appendToBuffer(&buf);
-        // 打印完整的响应内容用于调试
-        LOG_INFO << "Sending response:\n" << buf.toStringPiece().as_string();
+        LOG_INFO << req.methodString() << " " << req.path()
+                 << " → " << static_cast<int>(response.getStatusCode())
+                 << " len=" << buf.readableBytes();
 
         conn->send(&buf);
         // 如果是短连接的话，返回响应报文后就断开连接

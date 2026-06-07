@@ -16,10 +16,11 @@ SessionManager::SessionManager(std::unique_ptr<SessionStorage> storage)
 
 // 从请求中获取或创建会话，也就是说，如果请求中包含会话ID，则从存储中加载会话，否则创建一个新的会话
 std::shared_ptr<Session> SessionManager::getSession(const HttpRequest& req, HttpResponse* resp)
-{   
+{
     std::string sessionId = getSessionIdFromCookie(req);
-    
+
     std::shared_ptr<Session> session;
+    bool isNew = false;
 
     if (!sessionId.empty())
     {
@@ -31,14 +32,24 @@ std::shared_ptr<Session> SessionManager::getSession(const HttpRequest& req, Http
         sessionId = generateSessionId();
         session = std::make_shared<Session>(sessionId, this);
         setSessionCookie(sessionId, resp);
+        isNew = true;
     }
-    else 
+    else
     {
         session->setManager(this); // 为现有会话设置管理器
     }
 
     session->refresh();
-    storage_->save(session);  // 这里可能有问题，需要确保正确保存会话
+
+    // Persist策略：
+    // - 新建 session 立即保存（setValue 已触发 save，这里显式兜底）
+    // - 已有 session：仅在数据变更(dirty)或距上次保存超过 touch 间隔时保存
+    //   避免每次请求都写 Redis / 更新内存 map
+    if (isNew || session->isDirty())
+    {
+        storage_->save(session);
+        session->clearDirty();
+    }
     return session;
 }
 
