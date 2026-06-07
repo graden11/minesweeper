@@ -18,6 +18,7 @@ std::vector<float> Preprocessor::preprocessFile(const std::string& imagePath)
     }
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
                                std::istreambuf_iterator<char>());
+    // Use the allocation convenience wrapper — this path is file-based and non-hot.
     return preprocess(bytes);
 }
 

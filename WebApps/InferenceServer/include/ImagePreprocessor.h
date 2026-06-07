@@ -11,7 +11,8 @@ class ImagePreprocessor : public Preprocessor
 public:
     explicit ImagePreprocessor(const ModelConfig& config);
 
-    std::vector<float> preprocess(const std::vector<uint8_t>& imageBytes) override;
+    bool preprocess(const std::vector<uint8_t>& imageBytes,
+                    std::vector<float>& output) override;
 
 private:
     int targetW_, targetH_, targetC_;

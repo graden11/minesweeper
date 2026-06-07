@@ -96,9 +96,9 @@ nlohmann::json ModelPipeline::doPredictJson(const std::vector<uint8_t>& imageByt
     std::string taskStr = taskTypeToString(config_.task);
     PhaseTimer timer(config_.name, taskStr);
 
-    // 1. Preprocess: image bytes → CHW float tensor
-    auto input = preprocessor_->preprocess(imageBytes);
-    if (input.empty())
+    // 1. Preprocess: image bytes → CHW float tensor into thread-local buffer
+    thread_local std::vector<float> t_input;
+    if (!preprocessor_->preprocess(imageBytes, t_input))
     {
         nlohmann::json err;
         err["status"] = "error";
@@ -119,7 +119,7 @@ nlohmann::json ModelPipeline::doPredictJson(const std::vector<uint8_t>& imageByt
     // 3. Infer: use inferMulti for future multi-output support
     InferenceOutput inferOut;
     try {
-        inferOut = backend_->inferMulti(input, inputShape);
+        inferOut = backend_->inferMulti(t_input, inputShape);
         int64_t inferElapsed = timer.record("inference");
         MetricsCollector::instance().recordModelLatency(config_.name, taskStr, inferElapsed, 1);
     } catch (const std::exception& e) {
@@ -180,17 +180,17 @@ std::vector<std::string> ModelPipeline::predictBatch(
     batchInput.clear();
     batchInput.reserve(batchSize * perSampleElems);
 
+    thread_local std::vector<float> t_singleInput;
     for (auto& img : images)
     {
-        auto input = preprocessor_->preprocess(img);
-        if (input.empty())
+        if (!preprocessor_->preprocess(img, t_singleInput))
         {
             LOG_ERROR << "predictBatch: failed to decode image, zero-filling";
             batchInput.insert(batchInput.end(), perSampleElems, 0.0f);
         }
         else
         {
-            batchInput.insert(batchInput.end(), input.begin(), input.end());
+            batchInput.insert(batchInput.end(), t_singleInput.begin(), t_singleInput.end());
         }
     }
 

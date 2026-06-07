@@ -15,8 +15,19 @@ class Preprocessor
 public:
     virtual ~Preprocessor() = default;
 
+    /// Decode and preprocess in-memory image bytes, filling a caller-owned buffer.
+    /// Returns false on decode failure. Overrides the pure virtual below.
+    virtual bool preprocess(const std::vector<uint8_t>& imageBytes,
+                            std::vector<float>& output) = 0;
+
     /// Decode and preprocess in-memory image bytes → CHW float tensor.
-    virtual std::vector<float> preprocess(const std::vector<uint8_t>& imageBytes) = 0;
+    /// Convenience wrapper that allocates, kept for external callers.
+    virtual std::vector<float> preprocess(const std::vector<uint8_t>& imageBytes)
+    {
+        std::vector<float> out;
+        preprocess(imageBytes, out);
+        return out;
+    }
 
     /// Read an image file from disk, then delegate to preprocess().
     std::vector<float> preprocessFile(const std::string& imagePath);

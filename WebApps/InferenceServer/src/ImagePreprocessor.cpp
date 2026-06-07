@@ -28,7 +28,8 @@ ImagePreprocessor::ImagePreprocessor(const ModelConfig& config)
     }
 }
 
-std::vector<float> ImagePreprocessor::preprocess(const std::vector<uint8_t>& imageBytes)
+bool ImagePreprocessor::preprocess(const std::vector<uint8_t>& imageBytes,
+                                  std::vector<float>& output)
 {
     int w, h, channels;
     unsigned char* data = stbi_load_from_memory(
@@ -37,7 +38,7 @@ std::vector<float> ImagePreprocessor::preprocess(const std::vector<uint8_t>& ima
     if (!data)
     {
         LOG_ERROR << "ImagePreprocessor: failed to decode image";
-        return {};
+        return false;
     }
 
     const int elemCount = targetC_ * targetH_ * targetW_;
@@ -53,30 +54,26 @@ std::vector<float> ImagePreprocessor::preprocess(const std::vector<uint8_t>& ima
                             static_cast<stbir_pixel_layout>(targetC_));
     stbi_image_free(data);
 
-    // Normalize + transpose in one pass.
+    // Normalize + transpose into caller-owned buffer.
+    output.resize(elemCount);
+
     if (hwcLayout_) {
-        std::vector<float> input(elemCount);
         if (targetC_ == 3) {
             for (int i = 0; i < elemCount; i += 3) {
-                input[i]     = resized[i]     * scale_[0] + bias_[0];
-                input[i + 1] = resized[i + 1] * scale_[1] + bias_[1];
-                input[i + 2] = resized[i + 2] * scale_[2] + bias_[2];
+                output[i]     = resized[i]     * scale_[0] + bias_[0];
+                output[i + 1] = resized[i + 1] * scale_[1] + bias_[1];
+                output[i + 2] = resized[i + 2] * scale_[2] + bias_[2];
             }
         } else {
             for (int i = 0; i < elemCount; ++i) {
                 int c = i % targetC_;
-                input[i] = resized[i] * scale_[c] + bias_[c];
+                output[i] = resized[i] * scale_[c] + bias_[c];
             }
         }
-        return input;
     } else {
         // HWC source → CHW target: fused transpose + normalize.
-        // Loop order y→x→c gives sequential reads from resized (stride=3 per pixel,
-        // 3 consecutive bytes = 1 cache line), and plane-at-a-time sequential
-        // writes to CHW output.
-        std::vector<float> transposed(elemCount);
         if (targetC_ == 3) {
-            float* c0 = transposed.data();
+            float* c0 = output.data();
             float* c1 = c0 + targetH_ * targetW_;
             float* c2 = c1 + targetH_ * targetW_;
             for (int i = 0, p = 0; i < targetH_ * targetW_; ++i, p += 3) {
@@ -90,13 +87,13 @@ std::vector<float> ImagePreprocessor::preprocess(const std::vector<uint8_t>& ima
                     int hwcBase = (y * targetW_ + x) * targetC_;
                     for (int c = 0; c < targetC_; ++c) {
                         int chwIdx = (c * targetH_ + y) * targetW_ + x;
-                        transposed[chwIdx] = resized[hwcBase + c] * scale_[c] + bias_[c];
+                        output[chwIdx] = resized[hwcBase + c] * scale_[c] + bias_[c];
                     }
                 }
             }
         }
-        return transposed;
     }
+    return true;
 }
 
 } // namespace inference
