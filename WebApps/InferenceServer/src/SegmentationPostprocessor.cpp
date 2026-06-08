@@ -161,9 +161,11 @@ std::vector<nlohmann::json> SegmentationPostprocessor::postprocessBatch(
 
     size_t perSampleElems = batchOutput.totalElements() / batchSize;
 
+    const float* raw = batchOutput.dataPtrOrCopy();
+
     for (int i = 0; i < batchSize; ++i)
     {
-        auto begin = batchOutput.data.begin() + i * perSampleElems;
+        auto begin = raw + i * perSampleElems;
         auto end   = begin + perSampleElems;
 
         InferenceOutput singleIO;

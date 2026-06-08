@@ -9,8 +9,8 @@ nlohmann::json FeatureExtractionPostprocessor::postprocess(
     nlohmann::json resp;
     resp["status"]    = "ok";
     resp["task_type"] = "feature_extraction";
-    resp["dimension"] = static_cast<int>(output.data.size());
-    resp["embedding"] = output.data;
+    resp["dimension"] = static_cast<int>(output.totalElements());
+    resp["embedding"] = std::vector<float>(output.dataPtrOrCopy(), output.dataPtrOrCopy() + output.totalElements());
     return resp;
 }
 

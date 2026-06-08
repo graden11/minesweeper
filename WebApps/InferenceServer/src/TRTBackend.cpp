@@ -300,7 +300,10 @@ void TRTBackend::allocateBatchBuffers()
     int h = config_.input.preferred_height;
     int w = config_.input.preferred_width;
     perSampleInputSize_ = static_cast<size_t>(c) * h * w * sizeof(float);
-    perSampleOutputSize_ = outputSize_;
+    // outputSize_ was computed from the maxBatch shape => divide by maxBatchSize_
+    // to get the per-sample element/byte count. Failing to do so causes out-of-bounds
+    // reads/writes for batch output copies and garbled inference results.
+    perSampleOutputSize_ = outputSize_ / maxBatchSize_;
 
     size_t batchInputBytes  = static_cast<size_t>(maxBatchSize_) * perSampleInputSize_;
     size_t batchOutputBytes = static_cast<size_t>(maxBatchSize_) * perSampleOutputSize_;
