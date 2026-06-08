@@ -237,6 +237,22 @@ body::before {
 }
 .result-item .score { color: var(--color-primary); font-family: var(--font-mono); font-weight: 600; }
 
+/* Collapsible result cards */
+.result-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--color-text-dim);
+}
+.result-toggle:hover { color: var(--color-primary); }
+.result-toggle .arrow { display: inline-block; transition: transform 0.2s; font-size: 0.7rem; }
+.result-toggle .arrow.open { transform: rotate(90deg); }
+.result-body { display: none; margin-top: 6px; }
+.result-body.open { display: block; }
+
 /* Model table */
 .model-table {
   width: 100%;
@@ -869,13 +885,29 @@ uploadBtn.addEventListener('click', function() {
           var name = files[idx] ? files[idx].name : ('图片 ' + (idx + 1));
           var card = document.createElement('div');
           card.style.cssText = 'margin-bottom:12px;padding:10px;background:var(--color-input-bg);border-radius:8px';
-          card.innerHTML = '<div style="font-size:0.8rem;color:var(--color-text-dim);margin-bottom:6px">' + esc(name) + '</div>';
+
+          // Count results
+          var itemCount = 0;
+          if (r.predictions) itemCount = r.predictions.length;
+          else if (r.detections) itemCount = r.detections.length;
+          else if (r.embedding) itemCount = 1;
+
+          // Collapsible header
+          var toggle = document.createElement('div');
+          toggle.className = 'result-toggle';
+          toggle.innerHTML = '<span class="arrow">▶</span>' + esc(name) + ' <span style="font-size:0.72rem;opacity:0.6">(' + itemCount + ' 条)</span>';
+          card.appendChild(toggle);
+
+          // Collapsible body
+          var body = document.createElement('div');
+          body.className = 'result-body';
+
           if (r.predictions) {
             r.predictions.forEach(function(p) {
               var item = document.createElement('div');
               item.className = 'result-item';
               item.innerHTML = '<span>'+esc(p.label)+'</span><span class="score">'+p.confidence.toFixed(1)+'%</span>';
-              card.appendChild(item);
+              body.appendChild(item);
             });
           } else if (r.detections) {
             r.detections.forEach(function(d) {
@@ -885,7 +917,7 @@ uploadBtn.addEventListener('click', function() {
               item.innerHTML = '<span><b>'+esc(d.label)+'</b></span><span class="score">'+d.confidence.toFixed(1)+'%</span>' +
                 '<div style="font-size:0.75rem;color:var(--color-text-dim)">位置: (' +
                 (b.x1||0).toFixed(0)+','+(b.y1||0).toFixed(0)+')→('+(b.x2||0).toFixed(0)+','+(b.y2||0).toFixed(0)+')</div>';
-              card.appendChild(item);
+              body.appendChild(item);
             });
           } else if (r.embedding) {
             var dim = r.dimension || r.embedding.length;
@@ -893,10 +925,20 @@ uploadBtn.addEventListener('click', function() {
             var item = document.createElement('div');
             item.className = 'result-item';
             item.innerHTML = '<span>Embedding ('+dim+'d)</span><span class="score" style="font-size:0.7rem">'+preview+'...</span>';
-            card.appendChild(item);
+            body.appendChild(item);
           } else if (r.status === 'error') {
-            card.innerHTML += '<p style="color:var(--color-error);font-size:0.85rem;margin-top:4px">错误: '+esc(r.message||'')+'</p>';
+            body.innerHTML = '<p style="color:var(--color-error);font-size:0.85rem;margin-top:4px">错误: '+esc(r.message||'')+'</p>';
           }
+
+          // Toggle click handler
+          toggle.addEventListener('click', function() {
+            var arrow = toggle.querySelector('.arrow');
+            var isOpen = body.classList.toggle('open');
+            arrow.classList.toggle('open', isOpen);
+            arrow.textContent = isOpen ? '▼' : '▶';
+          });
+
+          card.appendChild(body);
           results.appendChild(card);
         });
       } else {
