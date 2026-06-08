@@ -7,7 +7,8 @@
 
 RequestBatcher::RequestBatcher(ModelFactory* factory, int maxBatchSize,
                                std::chrono::milliseconds maxDelayMs)
-    : factory_(factory), maxBatchSize_(maxBatchSize), maxDelayMs_(maxDelayMs)
+    : factory_(factory), maxBatchSize_(maxBatchSize), maxDelayMs_(maxDelayMs),
+      adaptiveDelayUs_(maxDelayMs)
 {
 }
 
@@ -41,14 +42,16 @@ void RequestBatcher::stop()
 }
 
 std::future<std::string> RequestBatcher::submit(std::string modelName,
-                                                 std::vector<uint8_t> imageData)
+                                               std::vector<uint8_t> imageData,
+                                               int inputW, int inputH, int inputC)
 {
     auto promise = std::make_shared<std::promise<std::string>>();
     auto future = promise->get_future();
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        queue_.push_back({std::move(modelName), std::move(imageData), std::move(promise),
+        queue_.push_back({std::move(modelName), inputW, inputH, inputC,
+                          std::move(imageData), std::move(promise),
                           std::chrono::steady_clock::now()});
     }
     cv_.notify_one();
@@ -63,13 +66,19 @@ void RequestBatcher::workerLoop()
         std::vector<Item> batch;
 
         {
+            std::chrono::microseconds delayUs;
+            {
+                std::lock_guard<std::mutex> lk(adaptiveMutex_);
+                delayUs = adaptiveDelayUs_;
+            }
+
             std::unique_lock<std::mutex> lock(mutex_);
             cv_.wait(lock, [this] { return !queue_.empty() || !running_.load(); });
 
             if (!running_.load() && queue_.empty())
                 break;
 
-            auto deadline = std::chrono::steady_clock::now() + maxDelayMs_;
+            auto deadline = std::chrono::steady_clock::now() + delayUs;
 
             while (!queue_.empty() && static_cast<int>(batch.size()) < maxBatchSize_)
             {
@@ -92,15 +101,40 @@ void RequestBatcher::workerLoop()
         if (batch.empty())
             continue;
 
-        // Group by model name and record batch metrics
+        // Adaptive timeout: exponentially weighted moving average of the time
+        // it took to fill this batch.  Stays near maxDelayMs_ under low load
+        // (merging-friendly), decreases under high load (latency-sensitive).
+        {
+            auto fillTime = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - batch[0].enqueueTime);
+            std::lock_guard<std::mutex> lk(adaptiveMutex_);
+            adaptiveDelayUs_ = std::chrono::microseconds(
+                (adaptiveDelayUs_.count() * (kEmaAlpha - 1) + fillTime.count()) / kEmaAlpha);
+            // Clamp to [1ms, configured max]
+            if (adaptiveDelayUs_ < std::chrono::milliseconds(1))
+                adaptiveDelayUs_ = std::chrono::milliseconds(1);
+            if (adaptiveDelayUs_ > maxDelayMs_)
+                adaptiveDelayUs_ = maxDelayMs_;
+        }
+
+        // Group by model name + input dimensions so that requests with
+        // different resolutions are never merged into the same batch.
         auto now = std::chrono::steady_clock::now();
         std::unordered_map<std::string, std::vector<size_t>> groups;
         for (size_t i = 0; i < batch.size(); ++i)
-            groups[batch[i].modelName].push_back(i);
+        {
+            auto& it = batch[i];
+            std::string key = it.modelName + ":" +
+                std::to_string(it.inputHeight) + "x" +
+                std::to_string(it.inputWidth) + "x" +
+                std::to_string(it.inputChannels);
+            groups[key].push_back(i);
+        }
 
-        for (auto& [modelName, indices] : groups)
+        for (auto& [groupKey, indices] : groups)
         {
             int bs = static_cast<int>(indices.size());
+            std::string modelName = batch[indices[0]].modelName;
             int64_t maxWait = 0;
             for (auto idx : indices)
             {
@@ -109,6 +143,7 @@ void RequestBatcher::workerLoop()
                 if (wait > maxWait) maxWait = wait;
             }
             MetricsCollector::instance().recordBatchMetrics(modelName, bs, maxWait);
+
             auto engine = factory_->getModel(modelName);
             if (!engine)
             {

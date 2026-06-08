@@ -19,6 +19,9 @@ public:
     struct Item
     {
         std::string modelName;
+        int inputWidth = 0;
+        int inputHeight = 0;
+        int inputChannels = 0;
         std::vector<uint8_t> imageData;
         std::shared_ptr<std::promise<std::string>> promise;
         std::chrono::steady_clock::time_point enqueueTime;
@@ -32,7 +35,8 @@ public:
     void stop();
 
     std::future<std::string> submit(std::string modelName,
-                                    std::vector<uint8_t> imageData);
+                                    std::vector<uint8_t> imageData,
+                                    int inputW = 0, int inputH = 0, int inputC = 0);
 
 private:
     void workerLoop();
@@ -40,6 +44,11 @@ private:
     ModelFactory* factory_;
     int maxBatchSize_;
     std::chrono::milliseconds maxDelayMs_;
+
+    // Adaptive timeout: EMA of recent batch fill time.
+    mutable std::mutex adaptiveMutex_;
+    std::chrono::microseconds adaptiveDelayUs_;
+    static constexpr int kEmaAlpha = 4;  // alpha = 1/4 (25% weight to new sample)
 
     std::deque<Item> queue_;
     std::mutex mutex_;
