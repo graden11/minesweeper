@@ -14,6 +14,7 @@
 #include "../include/handlers/HealthHandler.h"
 #include "../include/handlers/ReadyHandler.h"
 #include "../include/handlers/RawPredictHandler.h"
+#include "../include/handlers/SystemHandler.h"
 #ifdef ENABLE_TENSORRT
 #include "../include/handlers/ConvertHandler.h"
 #endif
@@ -36,6 +37,11 @@
 #include "../../../HttpServer/include/http/HttpRequest.h"
 #include "../../../HttpServer/include/http/HttpResponse.h"
 #include "../../../HttpServer/include/http/HttpServer.h"
+#include "../../../HttpServer/include/utils/FileUtil.h"
+
+// Adaptive hardware config
+#include "../include/HardwareDetector.h"
+#include "../include/ConfigAdvisor.h"
 
 using namespace http;
 
@@ -172,28 +178,24 @@ void InferenceServer::initialize()
         modelFactory_->registerModel(name, version, pipeline, type, path);
     };
 
-    // Load static models from config
-    for (auto &[name, entry] : config_.models) {
-        std::string version = entry.version.empty() ? "1" : entry.version;
-        loadModel(name, version, entry.type, entry.path,
-                  entry.task, entry.labels, entry.top_k,
-                  entry.input_width, entry.input_height, entry.input_channels,
-                  entry.input_name, entry.output_name,
-                  entry.input_mean, entry.input_std,
-                  entry.input_layout, entry.output_layout);
-    }
-
-    // Load dynamic models from config (persisted by /models/load API)
-    for (auto& entry : config_.dynamic_engines) {
-        loadModel(entry.name, entry.version, entry.type, entry.path,
-                  entry.task, entry.labels, entry.top_k,
-                  entry.input_width, entry.input_height, entry.input_channels,
-                  entry.input_name, entry.output_name,
-                  entry.input_mean, entry.input_std,
-                  entry.input_layout, entry.output_layout);
-    }
+    // Models are NOT loaded at startup — users load them manually via /models/load.
+    // This keeps container restart near-instant (~0.2s instead of ~50s).
+    // Model definitions remain in config for the frontend to display as available.
 
     initializeRouter();
+}
+
+void InferenceServer::initAdaptiveConfig()
+{
+    HardwareProfile hw;
+    if (HardwareDetector::detect(hw))
+    {
+        ConfigAdvisor::analyze(config_, hw, modelFactory_.get(), configPath_);
+    }
+    else
+    {
+        spdlog::warn("Hardware detection failed, skipping config recommendations");
+    }
 }
 
 void InferenceServer::initializeSession()
@@ -228,9 +230,14 @@ void InferenceServer::initializeMiddleware()
     httpServer_.addMiddleware(metricsMiddleware);
     httpServer_.addMiddleware(corsMiddleware);
 
-    // Per-IP rate limiting: 100 req/s, 200 burst
-    httpServer_.enableRateLimit(100, 200);
-    spdlog::info("Rate limiter enabled: 100 req/s per IP, burst 200");
+    // Per-IP rate limiting: configurable via config.json server.rate_limit_*
+    if (config_.server.rate_limit_req_per_sec > 0) {
+        httpServer_.enableRateLimit(config_.server.rate_limit_req_per_sec,
+                                    config_.server.rate_limit_burst);
+        spdlog::info("Rate limiter enabled: {} req/s per IP, burst {}",
+                     config_.server.rate_limit_req_per_sec,
+                     config_.server.rate_limit_burst);
+    }
 }
 
 void InferenceServer::initializeRouter()
@@ -256,6 +263,31 @@ void InferenceServer::initializeRouter()
     httpServer_.Get("/metrics/json", std::make_shared<MetricsHandler>());
     httpServer_.Get("/health", std::make_shared<HealthHandler>());
     httpServer_.Get("/ready", std::make_shared<ReadyHandler>(this));
+
+    // 系统硬件配置
+    httpServer_.Get("/system/hardware", std::make_shared<SystemHandler>(this));
+    httpServer_.Post("/system/config/apply", std::make_shared<SystemHandler>(this));
+    httpServer_.Post("/system/restart", std::make_shared<SystemHandler>(this));
+    httpServer_.Get("/system", [this](const http::HttpRequest& req, http::HttpResponse* resp) {
+        try {
+            FileUtil file("../WebApps/InferenceServer/resource/system.html");
+            std::vector<char> buf(file.size());
+            file.readFile(buf);
+            std::string body(buf.data(), buf.size());
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
+            resp->setContentType("text/html");
+            resp->setContentLength(body.size());
+            resp->setBody(body);
+            resp->setCloseConnection(false);
+        } catch (...) {
+            std::string err = R"({"status":"error","message":"system page not found"})";
+            resp->setStatusLine(req.getVersion(), http::HttpResponse::k500InternalServerError, "Internal Server Error");
+            resp->setContentType("application/json");
+            resp->setContentLength(err.size());
+            resp->setBody(err);
+            resp->setCloseConnection(true);
+        }
+    });
 
     // 动态模型管理
     httpServer_.Get("/models/available", [this](const http::HttpRequest& req, http::HttpResponse* resp) {

@@ -33,6 +33,8 @@ class RequestBatcher;
 class ReadyHandler;
 
 
+class SystemHandler;
+
 class InferenceServer
 {
 public:
@@ -40,6 +42,7 @@ public:
                  muduo::net::TcpServer::Option option = muduo::net::TcpServer::kNoReusePort);
 
     void setThreadNum(int numThreads);
+    void initAdaptiveConfig();
     void start();
     void cleanup();
 
@@ -134,6 +137,7 @@ private:
     friend class ModelUnloadHandler;
     friend class ConvertHandler;
     friend class ReadyHandler;
+    friend class SystemHandler;
 
 private:
     http::HttpServer                                 httpServer_;

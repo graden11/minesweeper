@@ -171,6 +171,19 @@ bool TRTBackend::loadEngine(const std::string& enginePath)
             LOG_INFO << "Dynamic engine detected, using max batch " << dims.d[0]
                      << " for tensor: " << name;
         }
+        else if (dims.nbDims > 0 && dims.d[0] > 0 && mode == nvinfer1::TensorIOMode::kINPUT)
+        {
+            // Static batch engine (built from an ONNX model without dynamic
+            // batch dims).  Clamp maxBatchSize_ so upstream code (ModelPipeline,
+            // RequestBatcher) knows not to attempt dynamic batching via
+            // setInputShape — which would fail and cause SIGSEGV if not caught.
+            int engineBatch = static_cast<int>(dims.d[0]);
+            if (maxBatchSize_ > engineBatch) {
+                maxBatchSize_ = engineBatch;
+                LOG_INFO << "Static batch engine (batch=" << engineBatch
+                         << "), clamping maxBatchSize_ to " << maxBatchSize_;
+            }
+        }
 
         size_t tensorSize = sizeof(float);
         for (int d = 0; d < dims.nbDims; d++)
@@ -180,11 +193,46 @@ bool TRTBackend::loadEngine(const std::string& enginePath)
         {
             inputIndex_ = i;
             inputSize_ = tensorSize;
+            config_.input.name = name ? name : "";
+            // Sync preferred dimensions from engine tensor shape
+            if (dims.nbDims >= 3) {
+                config_.input.preferred_width  = static_cast<int>(dims.d[dims.nbDims - 1]);
+                config_.input.preferred_height = static_cast<int>(dims.d[dims.nbDims - 2]);
+            }
+            if (dims.nbDims >= 4) {
+                config_.input.channels = static_cast<int>(dims.d[1]);
+            }
+            LOG_INFO << "TRTBackend: using input tensor '" << config_.input.name
+                     << "' shape=" << config_.input.channels << "x"
+                     << config_.input.preferred_height << "x"
+                     << config_.input.preferred_width;
         }
         else
         {
             outputIndex_ = i;
             outputSize_ = tensorSize;
+            config_.output.name = name ? name : "";
+            LOG_INFO << "TRTBackend: using output tensor '" << config_.output.name << "'";
+
+            // Auto-detect task from output tensor dimensions (same heuristic as OnnxBackend)
+            int outDims = dims.nbDims;
+            if (outDims == 2) {
+                int64_t outDimVal = outDims >= 2 ? dims.d[1] : 0;
+                std::string outName = name ? name : "";
+                std::transform(outName.begin(), outName.end(), outName.begin(), ::tolower);
+                if (outDimVal > 2000 || outName.find("embed") != std::string::npos) {
+                    detectedTask_ = "feature_extraction";
+                } else {
+                    detectedTask_ = "classification";
+                }
+            } else if (outDims == 3) {
+                detectedTask_ = "detection";
+            } else if (outDims >= 4) {
+                detectedTask_ = "segmentation";
+            }
+            if (!detectedTask_.empty())
+                LOG_INFO << "TRTBackend: auto-detected task = " << detectedTask_
+                         << " (output dims=" << outDims << ")";
         }
     }
 
@@ -250,16 +298,26 @@ bool TRTBackend::buildEngine(const std::string& onnxPath,
     int h = config.input.preferred_height;
     int w = config.input.preferred_width;
     int maxBatch = std::max(8, config.max_batch_size);
+    bool isHWC = config.input.layout == "hwc";
 
     const char* inputName = config.input.name.c_str();
 
+    auto makeDims = [&](int batch) {
+        return nvinfer1::Dims4{
+            batch,
+            isHWC ? h : c,
+            isHWC ? w : h,
+            isHWC ? c : w
+        };
+    };
+
     auto profile = builder->createOptimizationProfile();
     profile->setDimensions(inputName, nvinfer1::OptProfileSelector::kMIN,
-                           nvinfer1::Dims4{1, c, h, w});
+                           makeDims(1));
     profile->setDimensions(inputName, nvinfer1::OptProfileSelector::kOPT,
-                           nvinfer1::Dims4{maxBatch / 2, c, h, w});
+                           makeDims(maxBatch / 2));
     profile->setDimensions(inputName, nvinfer1::OptProfileSelector::kMAX,
-                           nvinfer1::Dims4{maxBatch, c, h, w});
+                           makeDims(maxBatch));
     trtConfig->addOptimizationProfile(profile);
     LOG_INFO << "TRT builder: dynamic batch profile [" << 1 << ", "
              << maxBatch / 2 << ", " << maxBatch << "]";
@@ -334,15 +392,28 @@ std::vector<float> TRTBackend::infer(const std::vector<float>& input,
     size_t byteCount = input.size() * sizeof(float);
     std::memcpy(slots_[slotIdx].h_input_pinned, input.data(), byteCount);
 
-    // GPU section
+    // GPU section — lock protects context_ against concurrent access from
+    // multiple threads on the SAME instance. Different model instances each
+    // have their own context_ and stream_ and can execute in parallel.
     {
         std::lock_guard<std::mutex> lock(gpu_mutex_);
 
         cudaMemcpyAsync(slots_[slotIdx].d_input, slots_[slotIdx].h_input_pinned,
                         byteCount, cudaMemcpyHostToDevice, stream_);
 
-        nvinfer1::Dims4 inputDims{1, c, h, w};
-        context_->setInputShape(config_.input.name.c_str(), inputDims);
+        bool isHWC = config_.input.layout == "hwc";
+        nvinfer1::Dims4 inputDims{1,
+            isHWC ? h : c,
+            isHWC ? w : h,
+            isHWC ? c : w};
+        if (!context_->setInputShape(config_.input.name.c_str(), inputDims))
+        {
+            LOG_ERROR << "TRT setInputShape failed — engine likely built with static batch="
+                      << inputDims.d[0] << " vs. requested batch=1; "
+                      << "check max_batch_size config matches the engine build profile";
+            releaseSlot(slotIdx);
+            return {};
+        }
         context_->setInputTensorAddress(config_.input.name.c_str(), slots_[slotIdx].d_input);
         context_->setOutputTensorAddress(config_.output.name.c_str(), slots_[slotIdx].d_output);
         context_->enqueueV3(stream_);
@@ -409,14 +480,19 @@ std::vector<float> TRTBackend::inferBatch(const std::vector<float>& batchInput,
     size_t batchInputBytes = batchInput.size() * sizeof(float);
     std::memcpy(h_batch_input_, batchInput.data(), batchInputBytes);
 
-    // GPU section
+    // GPU section — lock protects context_ against concurrent access from
+    // multiple threads on the SAME instance.
     {
         std::lock_guard<std::mutex> lock(gpu_mutex_);
 
         cudaMemcpyAsync(d_batch_input_, h_batch_input_,
                         batchInputBytes, cudaMemcpyHostToDevice, stream_);
 
-        nvinfer1::Dims4 inputDims{batchSize, c, h, w};
+        bool isHWC = config_.input.layout == "hwc";
+        nvinfer1::Dims4 inputDims{batchSize,
+            isHWC ? h : c,
+            isHWC ? w : h,
+            isHWC ? c : w};
         if (!context_->setInputShape(config_.input.name.c_str(), inputDims))
         {
             LOG_ERROR << "TRT setInputShape failed for batch " << batchSize

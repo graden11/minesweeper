@@ -1,126 +1,10 @@
 {
   "batching": {
     "enabled": true,
-    "max_batch_size": 8,
-    "max_delay_ms": 10
+    "max_batch_size": 16,
+    "max_delay_ms": 20
   },
   "dynamic_engines": [
-    {
-      "confidence_threshold": 0.5,
-      "input_channels": 3,
-      "input_height": 256,
-      "input_layout": "chw",
-      "input_mean": [
-        0.48500001430511475,
-        0.4560000002384186,
-        0.4059999883174896
-      ],
-      "input_name": "pixel_values",
-      "input_std": [
-        0.2290000021457672,
-        0.2240000069141388,
-        0.22499999403953552
-      ],
-      "input_width": 256,
-      "labels": "models/imagenet_classes.txt",
-      "max_detections": 100,
-      "name": "vision_model_onnx",
-      "nms_threshold": 0.44999998807907104,
-      "output_layout": "chw",
-      "output_name": "image_embeds",
-      "path": "models/vision_model.onnx",
-      "task": "feature_extraction",
-      "top_k": 5,
-      "type": "onnx",
-      "version": "1"
-    },
-    {
-      "confidence_threshold": 0.5,
-      "input_channels": 3,
-      "input_height": 224,
-      "input_layout": "chw",
-      "input_mean": [
-        0.48500001430511475,
-        0.4560000002384186,
-        0.4059999883174896
-      ],
-      "input_name": "data",
-      "input_std": [
-        0.2290000021457672,
-        0.2240000069141388,
-        0.22499999403953552
-      ],
-      "input_width": 224,
-      "labels": "models/imagenet_classes.txt",
-      "max_detections": 100,
-      "name": "squeezenet1.1-7_onnx",
-      "nms_threshold": 0.44999998807907104,
-      "output_layout": "chw",
-      "output_name": "squeezenet0_flatten0_reshape0",
-      "path": "models/squeezenet1.1-7.onnx",
-      "task": "classification",
-      "top_k": 5,
-      "type": "onnx",
-      "version": "1"
-    },
-    {
-      "confidence_threshold": 0.5,
-      "input_channels": 3,
-      "input_height": 224,
-      "input_layout": "chw",
-      "input_mean": [
-        0.48500001430511475,
-        0.4560000002384186,
-        0.4059999883174896
-      ],
-      "input_name": "input",
-      "input_std": [
-        0.2290000021457672,
-        0.2240000069141388,
-        0.22499999403953552
-      ],
-      "input_width": 224,
-      "labels": "models/imagenet_classes.txt",
-      "max_detections": 100,
-      "name": "resnet50_int8_trt",
-      "nms_threshold": 0.44999998807907104,
-      "output_layout": "chw",
-      "output_name": "output",
-      "path": "models/resnet50_int8.engine",
-      "task": "classification",
-      "top_k": 5,
-      "type": "tensorrt",
-      "version": "1"
-    },
-    {
-      "confidence_threshold": 0.5,
-      "input_channels": 3,
-      "input_height": 640,
-      "input_layout": "chw",
-      "input_mean": [
-        0.48500001430511475,
-        0.4560000002384186,
-        0.4059999883174896
-      ],
-      "input_name": "images",
-      "input_std": [
-        0.2290000021457672,
-        0.2240000069141388,
-        0.22499999403953552
-      ],
-      "input_width": 640,
-      "labels": "models/imagenet_classes.txt",
-      "max_detections": 100,
-      "name": "yolov8l_onnx",
-      "nms_threshold": 0.44999998807907104,
-      "output_layout": "chw",
-      "output_name": "output0",
-      "path": "models/yolov8l.onnx",
-      "task": "detection",
-      "top_k": 5,
-      "type": "onnx",
-      "version": "1"
-    },
     {
       "confidence_threshold": 0.5,
       "input_channels": 3,
@@ -148,35 +32,6 @@
       "task": "classification",
       "top_k": 5,
       "type": "tensorrt",
-      "version": "1"
-    },
-    {
-      "confidence_threshold": 0.5,
-      "input_channels": 3,
-      "input_height": 512,
-      "input_layout": "hwc",
-      "input_mean": [
-        0.48500001430511475,
-        0.4560000002384186,
-        0.4059999883174896
-      ],
-      "input_name": "input_1",
-      "input_std": [
-        0.2290000021457672,
-        0.2240000069141388,
-        0.22499999403953552
-      ],
-      "input_width": 512,
-      "labels": "models/imagenet_classes.txt",
-      "max_detections": 100,
-      "name": "deeplabv3p-resnet50-human_onnx",
-      "nms_threshold": 0.44999998807907104,
-      "output_layout": "hwc",
-      "output_name": "conv2d_9",
-      "path": "models/deeplabv3p-resnet50-human.onnx",
-      "task": "segmentation",
-      "top_k": 5,
-      "type": "onnx",
       "version": "1"
     }
   ],
@@ -211,58 +66,6 @@
         "top_k": 5,
         "type": "onnx",
         "version": "1"
-      },
-      "resnet50_int8": {
-        "input": {
-          "channels": 3,
-          "height": 224,
-          "mean": [
-            0.485,
-            0.456,
-            0.406
-          ],
-          "name": "input",
-          "std": [
-            0.229,
-            0.224,
-            0.225
-          ],
-          "width": 224
-        },
-        "output": {
-          "name": "output"
-        },
-        "path": "models/resnet50_int8.engine",
-        "task": "classification",
-        "top_k": 5,
-        "type": "tensorrt",
-        "version": "1"
-      },
-      "resnet50_trt": {
-        "input": {
-          "channels": 3,
-          "height": 224,
-          "mean": [
-            0.485,
-            0.456,
-            0.406
-          ],
-          "name": "input",
-          "std": [
-            0.229,
-            0.224,
-            0.225
-          ],
-          "width": 224
-        },
-        "output": {
-          "name": "output"
-        },
-        "path": "models/resnet50_classification.engine",
-        "task": "classification",
-        "top_k": 5,
-        "type": "tensorrt",
-        "version": "1"
       }
     },
     "global_labels_path": "models/imagenet_classes.txt"
@@ -274,6 +77,13 @@
     "pool_size": 10,
     "user": "root"
   },
+  "recommendations": {
+    "generated_at": "placeholder",
+    "profiles": {},
+    "scenario": "MIXED",
+    "system_profile": {},
+    "valid": true
+  },
   "redis": {
     "host": "redis",
     "pool_size": 5,
@@ -283,7 +93,9 @@
     "log_level": "INFO",
     "name": "HttpServer",
     "port": 80,
+    "rate_limit_burst": 2000,
+    "rate_limit_req_per_sec": 1000,
     "shutdown_timeout_ms": 30000,
-    "threads": 4
+    "threads": 8
   }
 }

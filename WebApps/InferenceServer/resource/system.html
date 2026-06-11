@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统配置 · AI 推理平台</title>
+<style>
+:root {
+  --color-bg: #0a0a14;
+  --color-surface: #12121f;
+  --color-card: rgba(255,255,255,0.04);
+  --color-border: rgba(255,255,255,0.08);
+  --color-primary: #00a8ff;
+  --color-primary-dim: rgba(0,168,255,0.15);
+  --color-accent: #5c6cf0;
+  --color-text: #e4e4ed;
+  --color-text-dim: #8888a0;
+  --color-error: #ff4d6a;
+  --color-success: #2ecc71;
+  --color-warn: #f0a040;
+  --color-input-bg: rgba(255,255,255,0.06);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font-mono: "SF Mono","Fira Code","Cascadia Code",monospace;
+  --max-width: 1024px;
+}
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; }
+body {
+  font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+body::before {
+  content: "";
+  position: fixed; top:-50%; left:-50%; width:200%; height:200%;
+  background: radial-gradient(ellipse at 30% 20%, rgba(0,168,255,0.06) 0%, transparent 50%),
+              radial-gradient(ellipse at 70% 60%, rgba(92,108,240,0.04) 0%, transparent 50%);
+  pointer-events: none; z-index: 0;
+}
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,10,20,0.85); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--color-border);
+}
+.header-inner {
+  max-width: var(--max-width); margin: 0 auto; padding: 0 24px; height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.logo {
+  display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem;
+  color: var(--color-text); text-decoration: none;
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center; font-size: 1rem;
+}
+.header-right { display:flex; align-items:center; gap:16px; }
+.nav-back {
+  padding: 5px 14px; font-size: 0.8rem; background: transparent; color: var(--color-primary);
+  border: 1px solid var(--color-primary-dim); border-radius: var(--radius-sm);
+  cursor: pointer; text-decoration: none; transition: all 0.2s;
+}
+.nav-back:hover { background: var(--color-primary-dim); }
+
+.main { position: relative; z-index: 1; max-width: var(--max-width); margin: 0 auto; padding: 24px; }
+
+.section {
+  background: var(--color-card); border: 1px solid var(--color-border);
+  border-radius: var(--radius); padding: 24px; margin-bottom: 20px;
+}
+.section-title {
+  font-size: 1.05rem; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+}
+.section-title::before {
+  content: ""; display: block; width: 4px; height: 16px;
+  background: var(--color-primary); border-radius: 2px;
+}
+
+/* Hardware info */
+.hw-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.hw-item {
+  padding: 14px; background: var(--color-input-bg);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+}
+.hw-item .hw-label { font-size: 0.75rem; color: var(--color-text-dim); text-transform: uppercase; margin-bottom: 4px; }
+.hw-item .hw-value { font-size: 0.95rem; font-weight: 600; font-family: var(--font-mono); }
+.hw-full {
+  grid-column: 1 / -1; padding: 14px; background: var(--color-input-bg);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+}
+.hw-full .hw-label { font-size: 0.75rem; color: var(--color-text-dim); text-transform: uppercase; margin-bottom: 4px; }
+.hw-full .hw-value { font-size: 0.95rem; font-weight: 600; font-family: var(--font-mono); }
+
+/* Profile cards */
+.cards-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
+.card {
+  background: var(--color-card); border: 2px solid var(--color-border);
+  border-radius: var(--radius); padding: 20px; cursor: pointer; transition: all 0.25s;
+  position: relative;
+}
+.card:hover { border-color: var(--color-primary); }
+.card.selected { border-color: var(--color-primary); background: var(--color-primary-dim); }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.card-title { font-size: 1.05rem; font-weight: 700; }
+.card-risk {
+  padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600;
+}
+.card-risk.low  { background: rgba(46,204,113,0.15); color: var(--color-success); }
+.card-risk.med  { background: rgba(240,160,64,0.15); color: var(--color-warn); }
+.card-risk.high { background: rgba(255,77,106,0.15); color: var(--color-error); }
+.card-best { font-size: 0.8rem; color: var(--color-text-dim); margin-bottom: 8px; }
+.card-reason { font-size: 0.82rem; color: var(--color-text-dim); line-height: 1.5; }
+
+/* Comparison table */
+.comp-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 16px; }
+.comp-table th, .comp-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--color-border); }
+.comp-table th { color: var(--color-text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+.comp-table td { font-family: var(--font-mono); }
+.comp-table td:first-child { font-family: inherit; color: var(--color-text-dim); font-size: 0.82rem; }
+.comp-table .cur-col  { color: var(--color-text); }
+.comp-table .sta-col  { color: var(--color-success); }
+.comp-table .agg-col  { color: var(--color-primary); }
+.comp-table tr:hover { background: rgba(255,255,255,0.03); }
+
+/* Buttons */
+.btn-row { display: flex; gap: 12px; align-items: center; }
+.btn {
+  padding: 10px 24px; border: none; border-radius: var(--radius-sm);
+  font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; font-family: inherit;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: #fff;
+}
+.btn-primary:hover { opacity: 0.92; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-outline {
+  padding: 10px 24px; background: transparent; color: var(--color-primary);
+  border: 1px solid var(--color-primary-dim); border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit; font-size: 0.9rem;
+}
+.restart-hint { font-size: 0.8rem; color: var(--color-warn); margin-left: 12px; display: flex; align-items: center; gap: 6px; }
+
+/* Messages */
+.msg { display: none; margin-top: 14px; padding: 10px 16px; border-radius: var(--radius-sm); font-size: 0.85rem; }
+.msg-ok  { background: rgba(46,204,113,0.1); color: var(--color-success); display: block; }
+.msg-err { background: rgba(255,77,106,0.1); color: var(--color-error); display: block; }
+.msg-loading { color: var(--color-primary); font-size: 0.85rem; display: block; }
+
+@media (max-width: 768px) {
+  .cards-row { grid-template-columns: 1fr; }
+  .hw-grid { grid-template-columns: 1fr; }
+  .comp-table { font-size: 0.78rem; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="/menu" class="logo">
+      <span class="logo-icon">&#9655;</span>
+      <span>推理平台</span>
+    </a>
+    <div class="header-right">
+      <a href="/menu" class="nav-back">← 返回控制台</a>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Hardware Info -->
+  <section class="section">
+    <div class="section-title">硬件信息</div>
+    <div class="hw-grid" id="hw-grid">
+      <div class="hw-item"><div class="hw-label">CPU</div><div class="hw-value" id="hw-cpu">—</div></div>
+      <div class="hw-item"><div class="hw-label">内存</div><div class="hw-value" id="hw-ram">—</div></div>
+      <div class="hw-item"><div class="hw-label">GPU</div><div class="hw-value" id="hw-gpu">—</div></div>
+      <div class="hw-item"><div class="hw-label">检测场景</div><div class="hw-value" id="hw-scenario">—</div></div>
+      <div class="hw-full"><div class="hw-label">单样本显存 (最大模型)</div><div class="hw-value" id="hw-per-sample">—</div></div>
+      <div class="hw-full" id="hw-gen-time-div" style="display:none"><div class="hw-label">数据生成时间</div><div class="hw-value" id="hw-gen-time">—</div></div>
+    </div>
+  </section>
+
+  <!-- Profile Cards -->
+  <section class="section">
+    <div class="section-title">配置方案 <span style="font-size:0.75rem;color:var(--color-text-dim);margin-left:8px">选择配置后点击下方"应用"按钮</span></div>
+    <div class="cards-row">
+      <div class="card" id="card-stable" onclick="selectProfile('stable')">
+        <div class="card-header">
+          <span class="card-title">🛡️ 稳定模式</span>
+          <span class="card-risk" id="card-stable-risk">—</span>
+        </div>
+        <div class="card-best" id="card-stable-best">—</div>
+        <div class="card-reason" id="card-stable-reason">—</div>
+      </div>
+      <div class="card" id="card-aggressive" onclick="selectProfile('aggressive')">
+        <div class="card-header">
+          <span class="card-title">⚡ 性能模式</span>
+          <span class="card-risk" id="card-aggressive-risk">—</span>
+        </div>
+        <div class="card-best" id="card-aggressive-best">—</div>
+        <div class="card-reason" id="card-aggressive-reason">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Table -->
+  <section class="section">
+    <div class="section-title">参数对比</div>
+    <table class="comp-table">
+      <thead><tr><th>参数</th><th>当前</th><th>稳定版</th><th>性能版</th></tr></thead>
+      <tbody id="comp-tbody">
+        <tr><td colspan="4" style="color:var(--color-text-dim)">加载中...</td></tr>
+      </tbody>
+    </table>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-apply" disabled onclick="applyProfile()">应用配置</button>
+      <button class="btn btn-outline" id="btn-restart" style="display:none" onclick="restartServer()">🔄 重启服务</button>
+      <span class="restart-hint" style="display:none" id="restart-hint">⚠ 配置已写入，重启服务后生效</span>
+    </div>
+    <div class="msg" id="msg"></div>
+  </section>
+
+</main>
+
+<script>
+var selectedProfile = null;
+var hwData = null;
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function selectProfile(key) {
+  selectedProfile = key;
+  document.getElementById('card-stable').classList.toggle('selected', key === 'stable');
+  document.getElementById('card-aggressive').classList.toggle('selected', key === 'aggressive');
+  document.getElementById('btn-apply').disabled = false;
+}
+
+function loadHardware() {
+  fetch('/system/hardware')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      hwData = d;
+
+      var sp = d.system_profile || {};
+      document.getElementById('hw-cpu').textContent = sp.cpu || '—';
+      document.getElementById('hw-ram').textContent = (sp.ram_gb != null) ? sp.ram_gb + ' GB' : '—';
+      document.getElementById('hw-gpu').textContent = sp.gpu || '—';
+      document.getElementById('hw-scenario').textContent = d.scenario || '—';
+      document.getElementById('hw-per-sample').textContent = (sp.per_sample_mb != null) ? sp.per_sample_mb.toFixed(2) + ' MB' : '—';
+
+      var genTimeDiv = document.getElementById('hw-gen-time-div');
+      var genTime = document.getElementById('hw-gen-time');
+      if (d.generated_at) {
+        genTimeDiv.style.display = '';
+        genTime.textContent = d.generated_at + ' UTC';
+      } else {
+        genTimeDiv.style.display = 'none';
+      }
+
+      // Profile cards
+      var profiles = d.profiles || {};
+      ['stable','aggressive'].forEach(function(key) {
+        var p = profiles[key];
+        if (!p) return;
+        document.getElementById('card-'+key+'-risk').textContent    = p.risk_level || '—';
+        document.getElementById('card-'+key+'-risk').className      = 'card-risk ' + ((p.risk_level === '低') ? 'low' : 'med');
+        document.getElementById('card-'+key+'-best').textContent    = p.best_for || '—';
+        document.getElementById('card-'+key+'-reason').textContent  = p.reason || '—';
+      });
+
+      // Comparison table
+      var cur = d.current || {};
+      var sta = (profiles.stable && profiles.stable.params) ? profiles.stable.params : null;
+      var agg = (profiles.aggressive && profiles.aggressive.params) ? profiles.aggressive.params : null;
+
+      var rows = [
+        { label: '线程数 (threads)',        curKey: 'server_threads',       fmt: function(v) { return v; } },
+        { label: '最大 Batch Size',        curKey: 'max_batch_size',       fmt: function(v) { return v; } },
+        { label: 'Batch 延迟 (ms)',        curKey: 'max_delay_ms',         fmt: function(v) { return v; } },
+        { label: '限流 (req/s)',           curKey: 'rate_limit_req_per_sec', fmt: function(v) { return v === 0 ? '禁用' : v; } },
+        { label: 'FP16',                   curKey: 'fp16',                  fmt: function(v) { return v ? 'ON' : 'OFF'; } }
+      ];
+
+      if (sta && sta.workspace_mb > 0 || (agg && agg.workspace_mb > 0)) {
+        rows.push({ label: 'TRT Workspace (MB)', curKey: null, curVal: '—', fmt: function(v) { return (typeof v === 'number' && v > 0) ? v : '—'; },
+                    staKey: 'workspace_mb', aggKey: 'workspace_mb' });
+      }
+
+      var html = '';
+      rows.forEach(function(row) {
+        html += '<tr>';
+        html += '<td>' + esc(row.label) + '</td>';
+
+        // Current
+        var curVal = row.curVal;
+        if (curVal === undefined && row.curKey !== null) curVal = (cur && cur[row.curKey] !== undefined) ? cur[row.curKey] : '—';
+        if (curVal === undefined) curVal = '—';
+        html += '<td class="cur-col">' + esc(row.fmt(curVal)) + '</td>';
+
+        // Stable
+        var staVal = (sta && row.staKey !== undefined) ? sta[row.staKey] : undefined;
+        if (staVal === undefined && row.curKey !== null) staVal = (sta && sta[row.curKey] !== undefined) ? sta[row.curKey] : '—';
+        if (staVal === undefined) staVal = '—';
+        html += '<td class="sta-col">' + esc(row.fmt(staVal)) + '</td>';
+
+        // Aggressive
+        var aggVal = (agg && row.aggKey !== undefined) ? agg[row.aggKey] : undefined;
+        if (aggVal === undefined && row.curKey !== null) aggVal = (agg && agg[row.curKey] !== undefined) ? agg[row.curKey] : '—';
+        if (aggVal === undefined) aggVal = '—';
+        html += '<td class="agg-col">' + esc(row.fmt(aggVal)) + '</td>';
+
+        html += '</tr>';
+      });
+      document.getElementById('comp-tbody').innerHTML = html;
+    })
+    .catch(function() {
+      document.getElementById('comp-tbody').innerHTML = '<tr><td colspan="4" style="color:var(--color-error)">加载失败 — 服务器可能尚未完成硬件检测</td></tr>';
+    });
+}
+
+function applyProfile() {
+  if (!selectedProfile) return;
+
+  var btn = document.getElementById('btn-apply');
+  var msg = document.getElementById('msg');
+  btn.disabled = true;
+  btn.textContent = '应用中...';
+  msg.className = 'msg msg-loading';
+  msg.textContent = '写入配置中...';
+
+  fetch('/system/config/apply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile: selectedProfile })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    btn.disabled = false;
+    btn.textContent = '应用配置';
+    if (d.status === 'ok') {
+      msg.className = 'msg msg-ok';
+      msg.textContent = d.message;
+      document.getElementById('restart-hint').style.display = '';
+      document.getElementById('btn-restart').style.display = '';
+    } else {
+      msg.className = 'msg msg-err';
+      msg.textContent = '应用失败: ' + (d.message || '');
+    }
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = '应用配置';
+    msg.className = 'msg msg-err';
+    msg.textContent = '网络错误';
+  });
+}
+
+function restartServer() {
+  var btn = document.getElementById('btn-restart');
+  var msg = document.getElementById('msg');
+  btn.disabled = true;
+  btn.textContent = '重启中...';
+  msg.className = 'msg msg-loading';
+  msg.textContent = '正在重启服务，页面将在 5 秒后刷新...';
+
+  fetch('/system/restart', { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === 'ok') {
+        msg.textContent = d.message;
+        // Wait a few seconds then refresh
+        setTimeout(function() { window.location.reload(); }, 5000);
+      } else {
+        btn.disabled = false;
+        btn.textContent = '🔄 重启服务';
+        msg.className = 'msg msg-err';
+        msg.textContent = '重启失败: ' + (d.message || '');
+      }
+    })
+    .catch(function() {
+      // The request will likely fail because the server is going down
+      // That's expected — just wait and refresh
+      msg.textContent = '服务正在重启，页面即将刷新...';
+      setTimeout(function() { window.location.reload(); }, 5000);
+    });
+}
+
+loadHardware();
+</script>
+
+</body>
+</html>

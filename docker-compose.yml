@@ -58,6 +58,8 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    restart: always
+    stop_grace_period: 35s
 
 volumes:
   mysql_data:

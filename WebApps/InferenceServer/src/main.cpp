@@ -70,6 +70,7 @@ int main(int argc, char* argv[])
 
   InferenceServer server(cfg);
   server.setConfigPath(configPath);
+  server.initAdaptiveConfig();
   server.setThreadNum(cfg.server.threads);
 
   // Block signals in this thread; they will be handled by sigwait thread

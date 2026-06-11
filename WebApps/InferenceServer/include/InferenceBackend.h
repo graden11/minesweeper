@@ -82,6 +82,10 @@ public:
 
     virtual int  maxBatchSize() const { return 1; }
     virtual bool isReady() const { return true; }
+    virtual const std::string& detectedTask() const {
+        static const std::string empty;
+        return empty;
+    }
 };
 
 } // namespace inference

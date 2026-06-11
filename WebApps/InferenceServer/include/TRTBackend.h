@@ -29,6 +29,7 @@ public:
 
     int  maxBatchSize() const override { return maxBatchSize_; }
     bool isReady() const override { return context_ != nullptr; }
+    const std::string& detectedTask() const override { return detectedTask_; }
 
 private:
     static constexpr int kNumSlots = 2;
@@ -59,6 +60,7 @@ private:
     // --- config-derived ---
     ModelConfig config_;
     int maxBatchSize_{1};
+    std::string detectedTask_;
 
     // --- TensorRT objects ---
     Logger logger_;
@@ -73,6 +75,11 @@ private:
 
     // --- CUDA ---
     cudaStream_t stream_{};
+
+    /// Per-instance mutex protects context_->setInputShape/setInputTensorAddress/
+    /// setOutputTensorAddress/enqueueV3 on this instance's stream and context.
+    /// Different ICudaEngine instances on different streams CAN safely execute
+    /// enqueueV3 concurrently — NVIDIA docs confirm this is supported.
     std::mutex gpu_mutex_;
 
     // Double-buffered slots for single requests

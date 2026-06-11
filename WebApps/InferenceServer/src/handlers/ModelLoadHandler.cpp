@@ -190,10 +190,12 @@ void ModelLoadHandler::handle(const http::HttpRequest& req, http::HttpResponse* 
             }
             cfg.input.name  = onnx->inputName();
             cfg.output.name = onnx->outputName();
-            if (!onnx->detectedTask().empty() && taskStr == "classification") {
-                cfg.task = inference::parseTaskType(onnx->detectedTask());
-                LOG_INFO << "ModelLoad: auto-detected task = " << onnx->detectedTask();
-            }
+        }
+        // Auto-propagate detected task for both ONNX and TRT backends
+        const auto& detected = backend->detectedTask();
+        if (!detected.empty() && taskStr == "classification") {
+            cfg.task = inference::parseTaskType(detected);
+            LOG_INFO << "ModelLoad: auto-detected task = " << detected;
         }
         if (!backend)
         {

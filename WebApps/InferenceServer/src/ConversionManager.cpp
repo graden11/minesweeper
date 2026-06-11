@@ -171,12 +171,53 @@ bool ConversionManager::buildEngine(const BuildOptions& opts, std::function<void
         LOG_INFO << "TRT builder: FP16 enabled";
     }
     progress(30, "Building optimization profile...");
-    int c = opts.inputC, h = opts.inputH, w = opts.inputW;
     int maxBatch = std::max(8, opts.maxBatchSize);
+
+    // Auto-detect input name and dims from the parsed ONNX network
+    auto* netInput = network->getInput(0);
+    std::string inputName = opts.inputName;
+    nvinfer1::Dims netDims{0};
+    if (netInput) {
+        inputName = netInput->getName();
+        netDims = netInput->getDimensions();
+        LOG_INFO << "TRT builder: auto-detected input '" << inputName
+                 << "' nbDims=" << netDims.nbDims;
+    } else {
+        LOG_WARN << "TRT builder: no network input found, falling back to CLI input name '"
+                 << opts.inputName << "'";
+        netDims = nvinfer1::Dims4{1, opts.inputC, opts.inputH, opts.inputW};
+    }
+
+    bool isDynamicBatch = (netDims.nbDims >= 1 && netDims.d[0] == -1);
+
+    // Read actual spatial/C dims from ONNX, not CLI
+    auto makeProfileDims = [&](int batch) {
+        nvinfer1::Dims4 d{};
+        for (int i = 0; i < 4; ++i) {
+            int dimVal = 1;
+            if (i < netDims.nbDims && netDims.d[i] > 0)
+                dimVal = static_cast<int>(netDims.d[i]);
+            d.d[i] = (i == 0) ? batch : dimVal;
+        }
+        return d;
+    };
+
     auto profile = builder->createOptimizationProfile();
-    profile->setDimensions(opts.inputName.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4{1, c, h, w});
-    profile->setDimensions(opts.inputName.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4{maxBatch / 2, c, h, w});
-    profile->setDimensions(opts.inputName.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4{maxBatch, c, h, w});
+    if (isDynamicBatch) {
+        profile->setDimensions(inputName.c_str(), nvinfer1::OptProfileSelector::kMIN,
+                               makeProfileDims(1));
+        profile->setDimensions(inputName.c_str(), nvinfer1::OptProfileSelector::kOPT,
+                               makeProfileDims(maxBatch / 2));
+        profile->setDimensions(inputName.c_str(), nvinfer1::OptProfileSelector::kMAX,
+                               makeProfileDims(maxBatch));
+        LOG_INFO << "TRT builder: dynamic batch profile [" << 1 << ", " << maxBatch/2 << ", " << maxBatch << "]";
+    } else {
+        auto dims1 = makeProfileDims(1);
+        profile->setDimensions(inputName.c_str(), nvinfer1::OptProfileSelector::kMIN, dims1);
+        profile->setDimensions(inputName.c_str(), nvinfer1::OptProfileSelector::kOPT, dims1);
+        profile->setDimensions(inputName.c_str(), nvinfer1::OptProfileSelector::kMAX, dims1);
+        LOG_INFO << "TRT builder: static batch profile";
+    }
     trtConfig->addOptimizationProfile(profile);
     progress(60, "Building serialized engine (may take minutes)...");
     auto plan = std::unique_ptr<nvinfer1::IHostMemory>(builder->buildSerializedNetwork(*network, *trtConfig));
