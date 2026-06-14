@@ -13,6 +13,8 @@
 
 #include <nlohmann/json.hpp>
 
+class ThreadPool;  // fwd
+
 namespace inference {
 
 /// Composes Preprocessor + InferenceBackend + Postprocessor.
@@ -23,7 +25,8 @@ public:
     ModelPipeline(ModelConfig config,
                   std::unique_ptr<Preprocessor> preprocessor,
                   std::unique_ptr<InferenceBackend> backend,
-                  std::unique_ptr<Postprocessor> postprocessor);
+                  std::unique_ptr<Postprocessor> postprocessor,
+                  ThreadPool* preprocessPool = nullptr);
 
     // --- InferenceEngine interface ---
     std::string predict(const std::string& imagePath) override;
@@ -49,6 +52,7 @@ private:
     std::unique_ptr<InferenceBackend> backend_;
     std::unique_ptr<Postprocessor> postprocessor_;
     std::vector<std::string> labels_;
+    ThreadPool* preprocessPool_;  // nullable; Phase 5 parallel preprocessing
 };
 
 } // namespace inference

@@ -2,6 +2,7 @@
 #include "../../include/ModelFactory.h"
 #include "../../include/InferenceEngine.h"
 #include "../../include/RequestBatcher.h"
+#include "../../include/RequestSlotPool.h"
 
 #include "../../../../HttpServer/include/http/HttpResponse.h"
 #include "../../../../HttpServer/include/utils/MetricsCollector.h"
@@ -63,7 +64,13 @@ void RawPredictHandler::handle(const http::HttpRequest &req, http::HttpResponse 
             return;
         }
 
-        std::vector<uint8_t> imageBytes(body.begin(), body.end());
+        // ── Acquire slot from pool, copy body directly into slot ──
+        auto slot = slotPool_ ? slotPool_->acquire() : nullptr;
+        if (slot)
+        {
+            slot->imageBytes.assign(body.begin(), body.end());
+            slot->perfTrace = resp->getPerfTrace();
+        }
 
         // ── T6: no base64 decode needed ──
         if (auto* pt = resp->getPerfTrace().get())
@@ -72,8 +79,22 @@ void RawPredictHandler::handle(const http::HttpRequest &req, http::HttpResponse 
         // Batching path
         if (batcher_)
         {
-            auto future = batcher_->submit(modelName, std::move(imageBytes), 0, 0, 0,
-                                           resp->getPerfTrace());
+            std::vector<uint8_t> imageBytes;  // fallback
+            std::future<std::string> future;
+
+            if (slot)
+            {
+                future = batcher_->submit(modelName, slot);
+            }
+            else
+            {
+                // Pool exhausted — allocate a one-off slot
+                auto fallbackSlot = std::make_shared<RequestSlot>();
+                fallbackSlot->imageBytes.assign(body.begin(), body.end());
+                fallbackSlot->perfTrace = resp->getPerfTrace();
+                future = batcher_->submit(modelName, fallbackSlot);  // batcher copies
+                slot = fallbackSlot;  // async lambda keeps this copy alive
+            }
 
             // ── T7-T8 ──
             if (auto* pt = resp->getPerfTrace().get())
@@ -82,7 +103,7 @@ void RawPredictHandler::handle(const http::HttpRequest &req, http::HttpResponse 
                 pt->t8_future_get_begin = pt->nowUs();
             }
 
-            // ── Phase 4: Async response — don't block IO thread ──
+            // ── Async response — don't block IO thread ──
             resp->setDeferred(true);
             auto conn = resp->getTcpConnection();
             auto version = req.getVersion();
@@ -92,12 +113,17 @@ void RawPredictHandler::handle(const http::HttpRequest &req, http::HttpResponse 
             std::thread([conn = std::move(conn),
                          version = std::move(version),
                          future = std::move(future),
+                         slot,     // keep slot alive
                          perfTrace = std::move(perfTrace),
                          complete = std::move(complete)]() mutable {
                 std::string resultJson;
                 try
                 {
-                    resultJson = future.get();
+                    future.get();  // synchronize; data is in slot->resultJson
+                    if (slot && !slot->resultJson.empty())
+                        resultJson = std::move(slot->resultJson);
+                    else if (!slot)
+                        resultJson = R"({"status":"error","message":"no slot"})";
                 }
                 catch (const std::exception& e)
                 {
@@ -129,6 +155,7 @@ void RawPredictHandler::handle(const http::HttpRequest &req, http::HttpResponse 
                     perfTrace->dump(100);
 
                 complete();
+                // slot shared_ptr drops here → returned to pool
             }).detach();
 
             return;
@@ -143,6 +170,7 @@ void RawPredictHandler::handle(const http::HttpRequest &req, http::HttpResponse 
             return;
         }
 
+        std::vector<uint8_t> imageBytes(body.begin(), body.end());
         std::string resultJson = engine->predictFromBytes(imageBytes);
 
         resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");

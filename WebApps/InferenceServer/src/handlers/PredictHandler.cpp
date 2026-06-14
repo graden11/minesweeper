@@ -2,7 +2,9 @@
 #include "../../include/ModelFactory.h"
 #include "../../include/InferenceEngine.h"
 #include "../../include/RequestBatcher.h"
+#include "../../include/RequestSlotPool.h"
 
+#include "../../../../HttpServer/include/http/HttpResponse.h"
 #include "../../../../HttpServer/include/utils/PathValidator.h"
 #include "../../../../HttpServer/include/utils/Base64.h"
 
@@ -75,36 +77,80 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
 
         std::string modelName = body.value("model_name", "resnet50");
 
+        // ── Acquire slot from pool ──
+        auto slot = slotPool_ ? slotPool_->acquire() : nullptr;
+        if (!slot)
+        {
+            // Pool exhausted — fall back to allocating path below
+        }
+
         // Batching path
         if (batcher_)
         {
-            std::vector<uint8_t> imageBytes;
-            if (hasPath)
+            // Decode image bytes into slot (or temp if pool exhausted)
+            if (slot)
             {
-                const auto& imagePath = body["image_path"].get_ref<const std::string&>();
-                if (!http::utils::isPathSafeInDirs(imagePath, kAllowedReadDirs))
+                if (hasPath)
                 {
-                    sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
-                                     "image_path is outside allowed directories");
-                    return;
+                    const auto& imagePath = body["image_path"].get_ref<const std::string&>();
+                    if (!http::utils::isPathSafeInDirs(imagePath, kAllowedReadDirs))
+                    {
+                        sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                         "image_path is outside allowed directories");
+                        return;
+                    }
+                    slot->imageBytes = readFile(imagePath);
+                    if (slot->imageBytes.empty())
+                    {
+                        sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                         "failed to read image file");
+                        return;
+                    }
                 }
-                imageBytes = readFile(imagePath);
-                if (imageBytes.empty())
+                else
                 {
-                    sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
-                                     "failed to read image file");
-                    return;
+                    const auto& b64 = body["image_data"].get_ref<const std::string&>();
+                    slot->imageBytes = http::utils::base64Decode(b64);
+                    if (slot->imageBytes.empty())
+                    {
+                        sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                         "failed to decode base64 image");
+                        return;
+                    }
                 }
+                slot->perfTrace = resp->getPerfTrace();
             }
-            else
+
+            std::vector<uint8_t> imageBytes;  // fallback when pool exhausted
+            if (!slot)
             {
-                const auto& b64 = body["image_data"].get_ref<const std::string&>();
-                imageBytes = http::utils::base64Decode(b64);
-                if (imageBytes.empty())
+                if (hasPath)
                 {
-                    sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
-                                     "failed to decode base64 image");
-                    return;
+                    const auto& imagePath = body["image_path"].get_ref<const std::string&>();
+                    if (!http::utils::isPathSafeInDirs(imagePath, kAllowedReadDirs))
+                    {
+                        sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                         "image_path is outside allowed directories");
+                        return;
+                    }
+                    imageBytes = readFile(imagePath);
+                    if (imageBytes.empty())
+                    {
+                        sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                         "failed to read image file");
+                        return;
+                    }
+                }
+                else
+                {
+                    const auto& b64 = body["image_data"].get_ref<const std::string&>();
+                    imageBytes = http::utils::base64Decode(b64);
+                    if (imageBytes.empty())
+                    {
+                        sendPredictError(req, resp, http::HttpResponse::k400BadRequest,
+                                         "failed to decode base64 image");
+                        return;
+                    }
                 }
             }
 
@@ -112,8 +158,21 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
             if (auto* pt = resp->getPerfTrace().get())
                 pt->t6_base64_decode_done = pt->nowUs();
 
-            auto future = batcher_->submit(modelName, std::move(imageBytes), 0, 0, 0,
-                                           resp->getPerfTrace());
+            std::future<std::string> future;
+            if (slot)
+            {
+                future = batcher_->submit(modelName, slot);
+            }
+            else
+            {
+                // Pool exhausted — allocate a one-off slot for this request.
+                // Keep a shared_ptr copy for the async lambda; batcher gets its own.
+                auto fallbackSlot = std::make_shared<RequestSlot>();
+                fallbackSlot->imageBytes = std::move(imageBytes);
+                fallbackSlot->perfTrace = resp->getPerfTrace();
+                future = batcher_->submit(modelName, fallbackSlot);  // batcher copies
+                slot = fallbackSlot;  // async lambda keeps this copy alive
+            }
 
             // ── T7: submit done, T8: future.get begin ──
             if (auto* pt = resp->getPerfTrace().get())
@@ -132,33 +191,41 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
             std::thread([conn = std::move(conn),
                          version = std::move(version),
                          future = std::move(future),
+                         slot,     // keep slot alive until response is sent
                          perfTrace = std::move(perfTrace),
                          complete = std::move(complete)]() mutable {
-                std::string resultJson = future.get();
+                // Wait for inference to complete (promise signals "ok")
+                std::string resultJson;
+                try
+                {
+                    future.get();  // synchronize — data is in slot->resultJson
+                    if (slot && slot->resultJson.empty())
+                        resultJson = R"({"status":"error","message":"empty result"})";
+                    else if (slot)
+                        resultJson = std::move(slot->resultJson);  // zero-copy move
+                }
+                catch (const std::exception& e)
+                {
+                    resultJson = R"({"status":"error","message":")"
+                               + std::string(e.what()) + "\"}";
+                }
 
                 if (perfTrace)
                     perfTrace->t9_future_get_return = perfTrace->nowUs();
 
-                // Build response buffer (owned by shared_ptr so it survives
-                // until the IO-thread runInLoop callback fires)
                 auto buf = std::make_shared<muduo::net::Buffer>();
                 {
-                    http::HttpResponse r(false);  // keep-alive
-                    r.setStatusLine(version,
-                                    http::HttpResponse::k200Ok, "OK");
+                    http::HttpResponse r(false);
+                    r.setStatusLine(version, http::HttpResponse::k200Ok, "OK");
                     r.setContentType("application/json");
                     r.setContentLength(resultJson.size());
                     r.setBody(std::move(resultJson));
                     r.setPerfTrace(perfTrace);
                     if (perfTrace)
                         perfTrace->t10_response_set = perfTrace->nowUs();
-
                     r.appendToBuffer(buf.get());
-                    // r (and perfTrace inside) go out of scope here,
-                    // but buf holds the serialised HTTP response.
                 }
 
-                // Send on the connection's IO thread
                 conn->getLoop()->runInLoop([conn, buf]() {
                     conn->send(buf.get());
                 });
@@ -166,7 +233,8 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
                 if (perfTrace)
                     perfTrace->dump(100);
 
-                complete();  // decrement inflightCount_
+                complete();
+                // slot shared_ptr drops here → returned to pool
             }).detach();
 
             return;

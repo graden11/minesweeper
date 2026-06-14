@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
+class ThreadPool;  // fwd
+
 class ModelFactory
 {
 public:
@@ -64,6 +66,10 @@ public:
 
     ModelFactory() = default;
 
+    /// Set the shared preprocessing thread pool. Must be called before registerModel().
+    void setPreprocessPool(ThreadPool* pool) { preprocessPool_ = pool; }
+    ThreadPool* getPreprocessPool() const { return preprocessPool_; }
+
     // Register a versioned model. Takes ownership of engine.
     void registerModel(const std::string& name,
                        const std::string& version,
@@ -116,4 +122,5 @@ private:
         std::map<std::string, ModelMeta>> fullMeta_;
 
     mutable std::shared_mutex mutex_;
+    ThreadPool* preprocessPool_ = nullptr;
 };

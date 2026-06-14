@@ -113,6 +113,16 @@ void InferenceServer::initialize()
                  << ", maxDelayMs=" << config_.batching.max_delay_ms;
     }
 
+    // ── Phase 5+6: Slot pool + preprocessing thread pool ──
+    int numSlots = std::max(64, config_.batching.max_batch_size * 4);
+    slotPool_ = std::make_shared<RequestSlotPool>(numSlots,
+        256 * 1024,    // 256 KB per slot for imageBytes
+        0);            // lazy tensor allocation
+    preprocessPool_ = std::make_shared<ThreadPool>(0);  // 0 = auto-detect cores
+    modelFactory_->setPreprocessPool(preprocessPool_.get());
+    LOG_INFO << "RequestSlotPool: " << slotPool_->capacity() << " slots, "
+             << "ThreadPool: " << preprocessPool_->threadCount() << " threads";
+
     const std::string &labelsPath = config_.labels_path;
 
     int batchSize = config_.batching.enabled ? config_.batching.max_batch_size : 1;
@@ -173,7 +183,8 @@ void InferenceServer::initialize()
 
         auto pipeline = std::make_shared<inference::ModelPipeline>(
             std::move(cfg), std::move(preprocessor),
-            std::move(backend), std::move(postprocessor));
+            std::move(backend), std::move(postprocessor),
+            preprocessPool_.get());
 
         modelFactory_->registerModel(name, version, pipeline, type, path);
     };
@@ -255,8 +266,8 @@ void InferenceServer::initializeRouter()
         getBackendData(req, resp);
     });
 
-    httpServer_.Post("/predict", std::make_shared<PredictHandler>(modelFactory_.get(), batcher_.get()));
-    httpServer_.Post("/predict/raw", std::make_shared<RawPredictHandler>(modelFactory_.get(), batcher_.get()));
+    httpServer_.Post("/predict", std::make_shared<PredictHandler>(modelFactory_.get(), batcher_.get(), slotPool_.get()));
+    httpServer_.Post("/predict/raw", std::make_shared<RawPredictHandler>(modelFactory_.get(), batcher_.get(), slotPool_.get()));
     httpServer_.Post("/predict/batch", std::make_shared<BatchPredictHandler>(modelFactory_.get()));
     httpServer_.Post("/predict/proto", std::make_shared<ProtoPredictHandler>(modelFactory_.get()));
     httpServer_.Get("/metrics", std::make_shared<MetricsHandler>());

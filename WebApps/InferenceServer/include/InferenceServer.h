@@ -11,6 +11,8 @@
 #ifdef ENABLE_TENSORRT
 #include "ConversionManager.h"
 #endif
+#include "RequestSlotPool.h"
+#include "ThreadPool.h"
 #include "../../../HttpServer/include/http/HttpServer.h"
 #include "../../../HttpServer/include/utils/ConfigLoader.h"
 #include "../../../HttpServer/include/utils/MysqlUtil.h"
@@ -57,7 +59,7 @@ private:
     void initializeSession();
     void initializeRouter();
     void initializeMiddleware();
-    
+
     void setSessionManager(std::unique_ptr<http::session::SessionManager> manager)
     {
         httpServer_.setSessionManager(std::move(manager));
@@ -123,7 +125,7 @@ private:
         }
         return 0;
     }
-    
+
 private:
     friend class EntryHandler;
     friend class LoginHandler;
@@ -157,6 +159,10 @@ private:
 #endif
     // 动态批处理（shared_ptr 因为 PredictHandler 需要持有引用）
     std::shared_ptr<RequestBatcher>                  batcher_;
+    // 请求槽位池（Phase 6：复用 imageBytes/inputTensor/resultJson）
+    std::shared_ptr<RequestSlotPool>                 slotPool_;
+    // 预处理线程池（Phase 5：并行 stbi decode + resize + normalize）
+    std::shared_ptr<ThreadPool>                      preprocessPool_;
     // 应用配置
     AppConfig                                        config_;
     std::string                                      configPath_;

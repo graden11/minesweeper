@@ -1,4 +1,5 @@
 #include "../include/ModelPipeline.h"
+#include "../include/ThreadPool.h"
 
 #include <chrono>
 #include <fstream>
@@ -11,7 +12,7 @@
 namespace inference {
 
 // ---------------------------------------------------------------------------
-// Helper: load labels file (same logic as old InferenceEngine::loadLabels)
+// Helper: load labels file
 // ---------------------------------------------------------------------------
 static std::vector<std::string> loadLabels(const std::string& path)
 {
@@ -58,7 +59,7 @@ namespace {
                 Clock::now() - start).count();
             MetricsCollector::instance().recordPhaseLatency(
                 modelName, taskType, phase, elapsed);
-            start = Clock::now();  // reset for next phase
+            start = Clock::now();
             return elapsed;
         }
     };
@@ -70,17 +71,20 @@ namespace {
 ModelPipeline::ModelPipeline(ModelConfig config,
                              std::unique_ptr<Preprocessor> preprocessor,
                              std::unique_ptr<InferenceBackend> backend,
-                             std::unique_ptr<Postprocessor> postprocessor)
+                             std::unique_ptr<Postprocessor> postprocessor,
+                             ThreadPool* preprocessPool)
     : config_(std::move(config)),
       preprocessor_(std::move(preprocessor)),
       backend_(std::move(backend)),
       postprocessor_(std::move(postprocessor)),
-      labels_(loadLabels(config_.labels_path))
+      labels_(loadLabels(config_.labels_path)),
+      preprocessPool_(preprocessPool)
 {
     LOG_INFO << "ModelPipeline created: " << config_.name << ":" << config_.version
              << " type=" << config_.type
              << " task=" << taskTypeToString(config_.task)
-             << " labels=" << labels_.size();
+             << " labels=" << labels_.size()
+             << " preprocessPool=" << (preprocessPool_ ? "yes" : "no");
 }
 
 int ModelPipeline::maxBatchSize() const
@@ -116,7 +120,7 @@ nlohmann::json ModelPipeline::doPredictJson(const std::vector<uint8_t>& imageByt
         isHWC ? config_.input.channels         : config_.input.preferred_width
     };
 
-    // 3. Infer: use inferMulti for future multi-output support
+    // 3. Infer
     InferenceOutput inferOut;
     try {
         inferOut = backend_->inferMulti(t_input, inputShape);
@@ -176,8 +180,7 @@ std::vector<std::string> ModelPipeline::predictBatch(
 
     int maxBatch = maxBatchSize();
 
-    // Fallback for models with static batch=1 (e.g. squeezenet):
-    // process each sample individually to avoid ONNX dimension errors.
+    // Fallback for models with static batch=1
     if (maxBatch <= 1)
     {
         std::vector<std::string> results;
@@ -190,20 +193,46 @@ std::vector<std::string> ModelPipeline::predictBatch(
     int perSampleElems = config_.input.elemCount();
     thread_local std::vector<float> batchInput;
 
-    // Process in chunks when batch exceeds the backend limit.
     std::vector<std::string> results;
     for (int start = 0; start < batchSize; start += maxBatch)
     {
         int chunk = std::min(maxBatch, batchSize - start);
         batchInput.assign(chunk * perSampleElems, 0.0f);
 
-        for (int i = 0; i < chunk; ++i)
+        // ── Phase 5: Parallel preprocessing using thread pool ──
+        if (preprocessPool_ && chunk > 1)
         {
-            if (!preprocessor_->preprocessInto(images[start + i], batchInput,
-                                               i * perSampleElems))
+            std::vector<std::future<bool>> futures;
+            futures.reserve(chunk);
+            for (int i = 0; i < chunk; ++i)
             {
-                LOG_ERROR << "predictBatch: failed to decode image "
-                          << (start + i) << ", zero-filling";
+                futures.push_back(preprocessPool_->enqueue(
+                    [this, &images, start, i, &batchInput, perSampleElems]() -> bool {
+                        return preprocessor_->preprocessInto(
+                            images[start + i], batchInput,
+                            static_cast<size_t>(i * perSampleElems));
+                    }));
+            }
+            for (int i = 0; i < chunk; ++i)
+            {
+                if (!futures[i].get())
+                {
+                    LOG_ERROR << "predictBatch: preprocess failed for image "
+                              << (start + i) << ", zero-filling";
+                }
+            }
+        }
+        else
+        {
+            // Serial path (no pool or single sample)
+            for (int i = 0; i < chunk; ++i)
+            {
+                if (!preprocessor_->preprocessInto(images[start + i], batchInput,
+                                                   static_cast<size_t>(i * perSampleElems)))
+                {
+                    LOG_ERROR << "predictBatch: failed to decode image "
+                              << (start + i) << ", zero-filling";
+                }
             }
         }
 

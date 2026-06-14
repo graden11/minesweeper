@@ -216,7 +216,8 @@ void ModelLoadHandler::handle(const http::HttpRequest& req, http::HttpResponse* 
 
         auto pipeline = std::make_shared<inference::ModelPipeline>(
             std::move(cfg), std::move(preprocessor),
-            std::move(backend), std::move(postprocessor));
+            std::move(backend), std::move(postprocessor),
+            factory->getPreprocessPool());
 
         factory->registerModel(name, version, pipeline, type, path);
 

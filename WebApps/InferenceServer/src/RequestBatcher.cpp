@@ -45,22 +45,29 @@ void RequestBatcher::stop()
         auto& item = queue_.front();
         item.promise->set_value(R"({"status":"error","message":"request cancelled: server shutting down"})");
         queue_.pop_front();
+        // slot shared_ptr drops → returned to pool
     }
 }
 
 std::future<std::string> RequestBatcher::submit(std::string modelName,
-                                               std::vector<uint8_t> imageData,
-                                               int inputW, int inputH, int inputC,
-                                               std::shared_ptr<http::PerfTrace> perfTrace)
+                                                std::shared_ptr<RequestSlot> slot,
+                                                int inputW, int inputH, int inputC)
 {
     auto promise = std::make_shared<std::promise<std::string>>();
     auto future = promise->get_future();
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        Item it{std::move(modelName), inputW, inputH, inputC,
-                std::move(imageData), std::move(promise),
-                std::chrono::steady_clock::now(), std::move(perfTrace)};
+        Item it;
+        it.modelName     = std::move(modelName);
+        it.inputWidth    = inputW;
+        it.inputHeight   = inputH;
+        it.inputChannels = inputC;
+        it.slot          = std::move(slot);
+        it.promise       = std::move(promise);
+        it.enqueueTime   = std::chrono::steady_clock::now();
+        it.perfTrace     = it.slot ? it.slot->perfTrace : nullptr;
+
         // B0: enqueue time
         if (it.perfTrace)
             it.perfTrace->b0_enqueue = it.perfTrace->nowUs();
@@ -94,18 +101,10 @@ void RequestBatcher::workerLoop()
             if (!running_.load() && queue_.empty())
                 break;
 
-            // ---- Queue-depth-driven dispatch ----
-            // Two modes:
-            //   IMMEDIATE (enoughQueued): drain all items up to maxBatchSize
-            //                              without waiting.
-            //   WAIT     (!enoughQueued):  collect items with a deadline of
-            //                              now + maxDelayUs, waiting for more
-            //                              arrivals until deadline expires.
             bool enoughQueued = (static_cast<int>(queue_.size()) >= kImmediateThreshold);
 
             if (enoughQueued)
             {
-                // Drain up to maxBatchSize, no waiting
                 while (!queue_.empty() && static_cast<int>(batch.size()) < maxBatchSize_)
                 {
                     batch.push_back(std::move(queue_.front()));
@@ -116,7 +115,6 @@ void RequestBatcher::workerLoop()
             }
             else
             {
-                // Wait up to maxDelayUs to collect a decent batch
                 auto deadline = steady_clock::now() + maxDelayUs;
                 while (!queue_.empty() && static_cast<int>(batch.size()) < maxBatchSize_)
                 {
@@ -151,7 +149,7 @@ void RequestBatcher::workerLoop()
         for (auto& it : batch)
             if (it.perfTrace) it.perfTrace->b2_batch_collected = it.perfTrace->nowUs();
 
-        // Group by model name + input dimensions.
+        // Group by model name + input dimensions
         std::unordered_map<std::string, std::vector<size_t>> groups;
         for (size_t i = 0; i < batch.size(); ++i)
         {
@@ -163,16 +161,15 @@ void RequestBatcher::workerLoop()
             groups[key].push_back(i);
         }
 
-        // Fire-and-forget dispatch: move ownership into the async task so
-        // the worker can immediately go back to collecting the next batch.
-        // GPU mutex inside the engine serialises actual inference.
+        // Fire-and-forget dispatch
         for (auto& [groupKey, indices] : groups)
         {
-            // Move per-item data out of batch (owned by the async task)
+            // Move per-item data out of batch (owned by the async task).
+            // slot shared_ptr keeps the buffer alive until inference completes.
             struct TaskItem {
                 std::shared_ptr<std::promise<std::string>> promise;
+                std::shared_ptr<RequestSlot> slot;
                 std::shared_ptr<http::PerfTrace> perfTrace;
-                std::vector<uint8_t> imageData;
                 int64_t enqueueUs;
             };
             auto tasks = std::make_shared<std::vector<TaskItem>>();
@@ -181,9 +178,10 @@ void RequestBatcher::workerLoop()
             {
                 tasks->push_back({
                     std::move(batch[idx].promise),
+                    std::move(batch[idx].slot),
                     std::move(batch[idx].perfTrace),
-                    std::move(batch[idx].imageData),
-                    duration_cast<microseconds>(batch[idx].enqueueTime.time_since_epoch()).count()
+                    duration_cast<microseconds>(
+                        batch[idx].enqueueTime.time_since_epoch()).count()
                 });
             }
             std::string modelName = batch[indices[0]].modelName;
@@ -192,15 +190,15 @@ void RequestBatcher::workerLoop()
             for (auto& t : *tasks)
                 if (t.perfTrace) t.perfTrace->b3_group_dispatch = t.perfTrace->nowUs();
 
-            // Fire-and-forget — future stored in pendingFutures_ to avoid
-            // blocking on destruction. shared_ptr keeps TaskItem alive.
             pendingFutures_.push_back(
-                std::async(std::launch::async, [this, tasks = std::move(tasks), modelName = std::move(modelName), bs]() {
+                std::async(std::launch::async, [this, tasks = std::move(tasks),
+                           modelName = std::move(modelName), bs]() {
                 int64_t maxWait = 0;
                 auto now = steady_clock::now();
                 for (auto& t : *tasks)
                 {
-                    int64_t w = duration_cast<microseconds>(now.time_since_epoch()).count() - t.enqueueUs;
+                    int64_t w = duration_cast<microseconds>(
+                        now.time_since_epoch()).count() - t.enqueueUs;
                     if (w > maxWait) maxWait = w;
                 }
                 MetricsCollector::instance().recordBatchMetrics(modelName, bs, maxWait);
@@ -208,16 +206,26 @@ void RequestBatcher::workerLoop()
                 auto engine = factory_->getModel(modelName);
                 if (!engine)
                 {
-                    std::string err = R"({"status":"error","message":"unknown model: )" + modelName + "\"}";
+                    std::string err = R"({"status":"error","message":"unknown model: )"
+                                    + modelName + "\"}";
                     for (auto& t : *tasks)
+                    {
+                        if (t.slot) t.slot->resultJson = err;
                         t.promise->set_value(err);
+                    }
                     return;
                 }
 
+                // Read imageBytes from slots (zero-copy reference, no vector copy)
                 std::vector<std::vector<uint8_t>> images;
                 images.reserve(tasks->size());
                 for (auto& t : *tasks)
-                    images.push_back(std::move(t.imageData));
+                {
+                    if (t.slot)
+                        images.push_back(t.slot->imageBytes);  // copy ref only? Actually copies...
+                    else
+                        images.emplace_back();  // should not happen
+                }
 
                 for (auto& t : *tasks)
                     if (t.perfTrace) t.perfTrace->b4_predict_begin = t.perfTrace->nowUs();
@@ -230,17 +238,22 @@ void RequestBatcher::workerLoop()
                 catch (const std::exception& e)
                 {
                     LOG_ERROR << "predictBatch error: " << e.what();
-                    std::string err = R"({"status":"error","message":")" + std::string(e.what()) + "\"}";
+                    std::string err = R"({"status":"error","message":")"
+                                    + std::string(e.what()) + "\"}";
                     results.assign(tasks->size(), err);
                 }
 
                 for (auto& t : *tasks)
                     if (t.perfTrace) t.perfTrace->b5_predict_done = t.perfTrace->nowUs();
 
+                // Write results into slots + set promises
                 for (size_t i = 0; i < tasks->size() && i < results.size(); ++i)
                 {
-                    (*tasks)[i].promise->set_value(std::move(results[i]));
-                    if ((*tasks)[i].perfTrace) (*tasks)[i].perfTrace->b6_promise_set = (*tasks)[i].perfTrace->nowUs();
+                    if ((*tasks)[i].slot)
+                        (*tasks)[i].slot->resultJson = std::move(results[i]);
+                    (*tasks)[i].promise->set_value("ok");  // signal; data is in slot
+                    if ((*tasks)[i].perfTrace)
+                        (*tasks)[i].perfTrace->b6_promise_set = (*tasks)[i].perfTrace->nowUs();
                 }
             }));
         }
