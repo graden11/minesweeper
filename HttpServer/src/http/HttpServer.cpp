@@ -162,6 +162,17 @@ void HttpServer::onMessage(const muduo::net::TcpConnectionPtr &conn,
             conn->send("HTTP/1.1 400 Bad Request\r\n\r\n");
             conn->shutdown();
         }
+        // Per-request timing: create trace on first message of a new request
+        if (!context->getPerfTrace())
+        {
+            auto pt = std::make_shared<PerfTrace>();
+            pt->t0_on_message = pt->nowUs();
+            context->setPerfTrace(std::move(pt));
+        }
+        // Record parse-done time
+        if (auto* pt = context->getPerfTrace().get())
+            pt->t1_parse_done = pt->nowUs();
+
         // 如果buf缓冲区中解析出一个完整的数据包才封装响应报文
         if (context->gotAll())
         {
@@ -223,17 +234,47 @@ void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpR
         response.setRequestId(generateRequestId());
         response.setClientIp(conn->peerAddress().toIp());
 
+        // ── Perf trace: transfer from HttpContext to HttpResponse ──
+        HttpContext* ctxPtr = boost::any_cast<HttpContext>(conn->getMutableContext());
+        if (ctxPtr)
+        {
+            auto pt = ctxPtr->getPerfTrace();
+            if (pt)
+            {
+                pt->t2_on_request = pt->nowUs();
+                if (response.getRequestId().empty())
+                    response.setRequestId(generateRequestId());
+                response.setPerfTrace(pt);
+            }
+        }
+
         // 根据请求报文信息来封装响应报文对象
         httpCallback_(req, &response); // 执行onHttpCallback函数
+
+        // ── Perf trace: response build + send ──
+        if (auto* pt = response.getPerfTrace().get())
+            pt->t12_append_begin = pt->nowUs();
 
         // 可以给response设置一个成员，判断是否请求的是文件，如果是文件设置为true，并且存在文件位置在这里send出去。
         muduo::net::Buffer buf;
         response.appendToBuffer(&buf);
+
+        if (auto* pt = response.getPerfTrace().get())
+            pt->t13_append_done = pt->nowUs();
+
         LOG_INFO << req.methodString() << " " << req.path()
                  << " → " << static_cast<int>(response.getStatusCode())
                  << " len=" << buf.readableBytes();
 
         conn->send(&buf);
+
+        if (auto* pt = response.getPerfTrace().get())
+            pt->t14_send_return = pt->nowUs();
+
+        // dump sampled trace (1 every 100 requests)
+        if (auto* pt = response.getPerfTrace().get())
+            pt->dump(100);
+
         // 如果是短连接的话，返回响应报文后就断开连接
         if (response.closeConnection())
         {
@@ -255,10 +296,14 @@ void HttpServer::handleRequest(const HttpRequest &req, HttpResponse *resp)
     try
     {
         // 处理请求前的中间件
+        if (auto* pt = resp->getPerfTrace().get())
+            pt->t3_middleware_before = pt->nowUs();
         HttpRequest mutableReq = req;
         middlewareChain_.processBefore(mutableReq);
 
         // 路由处理
+        if (auto* pt = resp->getPerfTrace().get())
+            pt->t4_handler_enter = pt->nowUs();
         if (!router_.route(mutableReq, resp))
         {
             LOG_INFO << "请求的啥，url：" << req.method() << " " << req.path();
@@ -269,6 +314,8 @@ void HttpServer::handleRequest(const HttpRequest &req, HttpResponse *resp)
         }
 
         // 处理响应后的中间件
+        if (auto* pt = resp->getPerfTrace().get())
+            pt->t11_middleware_after = pt->nowUs();
         middlewareChain_.processAfter(*resp);
     }
     catch (const HttpResponse& res) 

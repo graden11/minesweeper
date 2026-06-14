@@ -2,7 +2,7 @@
   "batching": {
     "enabled": true,
     "max_batch_size": 16,
-    "max_delay_ms": 20
+    "max_delay_ms": 2
   },
   "dynamic_engines": [
     {
@@ -24,11 +24,11 @@
       "input_width": 224,
       "labels": "models/imagenet_classes.txt",
       "max_detections": 100,
-      "name": "resnet50_classification_trt",
+      "name": "squeezenet1.1-7_trt",
       "nms_threshold": 0.44999998807907104,
       "output_layout": "chw",
       "output_name": "output",
-      "path": "models/resnet50_classification.engine",
+      "path": "models/squeezenet1.1-7.engine",
       "task": "classification",
       "top_k": 5,
       "type": "tensorrt",
@@ -78,11 +78,48 @@
     "user": "root"
   },
   "recommendations": {
-    "generated_at": "placeholder",
-    "profiles": {},
+    "generated_at": "2026-06-14T08:01:36",
+    "profiles": {
+      "aggressive": {
+        "best_for": "压测环境、离线批处理",
+        "label": "性能模式",
+        "params": {
+          "fp16": true,
+          "max_batch_size": 64,
+          "max_delay_ms": 5,
+          "rate_limit_burst": 0,
+          "rate_limit_req_per_sec": 0,
+          "server_threads": 12,
+          "workspace_mb": 1053
+        },
+        "reason": "最大化利用显存和CPU线程，追求极致吞吐",
+        "risk_level": "中"
+      },
+      "stable": {
+        "best_for": "生产环境、7×24小时服务",
+        "label": "稳定模式",
+        "params": {
+          "fp16": true,
+          "max_batch_size": 16,
+          "max_delay_ms": 20,
+          "rate_limit_burst": 2000,
+          "rate_limit_req_per_sec": 1000,
+          "server_threads": 8,
+          "workspace_mb": 512
+        },
+        "reason": "保留充足系统资源冗余，优先保证稳定性",
+        "risk_level": "低"
+      }
+    },
     "scenario": "MIXED",
-    "system_profile": {},
-    "valid": true
+    "system_profile": {
+      "cpu": "16 logical cores, 16 physical",
+      "gpu": "NVIDIA GeForce RTX 5060 (8150MB total, 7020MB free, CC 12.0)",
+      "gpu_count": 1,
+      "has_gpu": true,
+      "per_sample_mb": 0.57421875,
+      "ram_gb": 15
+    }
   },
   "redis": {
     "host": "redis",

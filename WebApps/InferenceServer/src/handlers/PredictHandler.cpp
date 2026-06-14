@@ -53,6 +53,13 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
     {
         json body = json::parse(req.getBody());
 
+        // ── Perf trace T5: JSON parse done ──
+        if (auto* pt = resp->getPerfTrace().get())
+        {
+            pt->t5_json_parse_done = pt->nowUs();
+            pt->endpoint = req.path();
+        }
+
         bool hasPath = body.contains("image_path");
         bool hasData = body.contains("image_data");
 
@@ -98,14 +105,36 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
                 }
             }
 
-            auto future = batcher_->submit(modelName, std::move(imageBytes));
+            // ── T6: base64 decode done ──
+            if (auto* pt = resp->getPerfTrace().get())
+                pt->t6_base64_decode_done = pt->nowUs();
+
+            auto future = batcher_->submit(modelName, std::move(imageBytes), 0, 0, 0,
+                                           resp->getPerfTrace());
+
+            // ── T7: submit done, T8: future.get begin ──
+            if (auto* pt = resp->getPerfTrace().get())
+            {
+                pt->t7_batcher_submit_done = pt->nowUs();
+                pt->t8_future_get_begin = pt->nowUs();
+            }
+
             std::string resultJson = future.get();
+
+            // ── T9: future.get return ──
+            if (auto* pt = resp->getPerfTrace().get())
+                pt->t9_future_get_return = pt->nowUs();
 
             resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
             resp->setContentType("application/json");
             resp->setContentLength(resultJson.size());
             resp->setBody(std::move(resultJson));
             resp->setCloseConnection(false);
+
+            // ── T10: response set done ──
+            if (auto* pt = resp->getPerfTrace().get())
+                pt->t10_response_set = pt->nowUs();
+
             return;
         }
 

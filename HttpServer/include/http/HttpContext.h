@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 
 #include <muduo/net/TcpServer.h>
 
@@ -9,7 +10,9 @@
 namespace http
 {
 
-class HttpContext 
+struct PerfTrace;  // fwd decl — full definition in HttpResponse.h
+
+class HttpContext
 {
 public:
     enum HttpRequestParseState
@@ -19,7 +22,7 @@ public:
         kExpectBody, // 解析请求体
         kGotAll, // 解析完成
     };
-    
+
     HttpContext()
     : state_(kExpectRequestLine), maxBodySize_(10 * 1024 * 1024)  // 10 MB default
     {}
@@ -27,7 +30,7 @@ public:
     void setMaxBodySize(uint64_t bytes) { maxBodySize_ = bytes; }
 
     bool parseRequest(muduo::net::Buffer* buf, muduo::Timestamp receiveTime);
-    bool gotAll() const 
+    bool gotAll() const
     { return state_ == kGotAll;  }
 
     void reset()
@@ -43,12 +46,16 @@ public:
     HttpRequest& request()
     { return request_;}
 
+    void setPerfTrace(std::shared_ptr<PerfTrace> pt) { perfTrace_ = std::move(pt); }
+    std::shared_ptr<PerfTrace> getPerfTrace() const { return perfTrace_; }
+
 private:
     bool processRequestLine(const char* begin, const char* end);
 private:
     HttpRequestParseState state_;
     HttpRequest           request_;
     uint64_t              maxBodySize_ = 10 * 1024 * 1024;
+    std::shared_ptr<PerfTrace> perfTrace_;
 };
 
 } // namespace http
