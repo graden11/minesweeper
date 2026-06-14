@@ -248,8 +248,22 @@ void HttpServer::onRequest(const muduo::net::TcpConnectionPtr &conn, const HttpR
             }
         }
 
+        // ── Async response support (Phase 3) ──
+        response.setTcpConnection(conn);
+        response.setCompleteCallback([this]() {
+            inflightCount_.fetch_sub(1);
+        });
+
         // 根据请求报文信息来封装响应报文对象
         httpCallback_(req, &response); // 执行onHttpCallback函数
+
+        // ── Deferred path: handler will send asynchronously ──
+        if (response.isDeferred())
+        {
+            // Handler owns sending the response; complete callback
+            // will decrement inflightCount_ after async send.
+            return;
+        }
 
         // ── Perf trace: response build + send ──
         if (auto* pt = response.getPerfTrace().get())

@@ -7,8 +7,11 @@
 #include "../../../../HttpServer/include/utils/Base64.h"
 
 #include <muduo/base/Logging.h>
+#include <muduo/net/EventLoop.h>
 
 #include <fstream>
+#include <future>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -119,21 +122,52 @@ void PredictHandler::handle(const http::HttpRequest &req, http::HttpResponse *re
                 pt->t8_future_get_begin = pt->nowUs();
             }
 
-            std::string resultJson = future.get();
+            // ── Phase 3: Async response — don't block IO thread ──
+            resp->setDeferred(true);
+            auto conn = resp->getTcpConnection();
+            auto version = req.getVersion();
+            auto complete = resp->takeCompleteCallback();
+            auto perfTrace = resp->getPerfTrace();
 
-            // ── T9: future.get return ──
-            if (auto* pt = resp->getPerfTrace().get())
-                pt->t9_future_get_return = pt->nowUs();
+            std::thread([conn = std::move(conn),
+                         version = std::move(version),
+                         future = std::move(future),
+                         perfTrace = std::move(perfTrace),
+                         complete = std::move(complete)]() mutable {
+                std::string resultJson = future.get();
 
-            resp->setStatusLine(req.getVersion(), http::HttpResponse::k200Ok, "OK");
-            resp->setContentType("application/json");
-            resp->setContentLength(resultJson.size());
-            resp->setBody(std::move(resultJson));
-            resp->setCloseConnection(false);
+                if (perfTrace)
+                    perfTrace->t9_future_get_return = perfTrace->nowUs();
 
-            // ── T10: response set done ──
-            if (auto* pt = resp->getPerfTrace().get())
-                pt->t10_response_set = pt->nowUs();
+                // Build response buffer (owned by shared_ptr so it survives
+                // until the IO-thread runInLoop callback fires)
+                auto buf = std::make_shared<muduo::net::Buffer>();
+                {
+                    http::HttpResponse r(false);  // keep-alive
+                    r.setStatusLine(version,
+                                    http::HttpResponse::k200Ok, "OK");
+                    r.setContentType("application/json");
+                    r.setContentLength(resultJson.size());
+                    r.setBody(std::move(resultJson));
+                    r.setPerfTrace(perfTrace);
+                    if (perfTrace)
+                        perfTrace->t10_response_set = perfTrace->nowUs();
+
+                    r.appendToBuffer(buf.get());
+                    // r (and perfTrace inside) go out of scope here,
+                    // but buf holds the serialised HTTP response.
+                }
+
+                // Send on the connection's IO thread
+                conn->getLoop()->runInLoop([conn, buf]() {
+                    conn->send(buf.get());
+                });
+
+                if (perfTrace)
+                    perfTrace->dump(100);
+
+                complete();  // decrement inflightCount_
+            }).detach();
 
             return;
         }

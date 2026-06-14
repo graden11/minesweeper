@@ -156,6 +156,22 @@ public:
     void setPerfTrace(std::shared_ptr<PerfTrace> pt) { perfTrace_ = std::move(pt); }
     std::shared_ptr<PerfTrace> getPerfTrace() const { return perfTrace_; }
 
+    // ── Async/deferred response support (Phase 3) ──
+    // When a handler sets deferred=true, HttpServer::onRequest skips
+    // appendToBuffer/send.  The handler is responsible for sending the
+    // response later (usually from a background thread via
+    // conn->getLoop()->runInLoop).  The onComplete callback is called
+    // after the async send to decrement inflightCount_.
+    void setDeferred(bool v) { deferred_ = v; }
+    bool isDeferred() const { return deferred_; }
+
+    using CompleteCallback = std::function<void()>;
+    void setCompleteCallback(CompleteCallback cb) { onComplete_ = std::move(cb); }
+    CompleteCallback takeCompleteCallback() { return std::move(onComplete_); }
+
+    void setTcpConnection(muduo::net::TcpConnectionPtr conn) { conn_ = std::move(conn); }
+    muduo::net::TcpConnectionPtr getTcpConnection() const { return conn_; }
+
     void setStatusLine(const std::string& version,
                          HttpStatusCode statusCode,
                          const std::string& statusMessage);
@@ -174,6 +190,9 @@ private:
     std::string                        requestId_;
     std::string                        clientIp_;
     std::shared_ptr<PerfTrace>         perfTrace_;
+    bool                               deferred_ = false;
+    CompleteCallback                   onComplete_;
+    muduo::net::TcpConnectionPtr       conn_;
 };
 
 } // namespace http
