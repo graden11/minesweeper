@@ -2,9 +2,183 @@
   "batching": {
     "enabled": true,
     "max_batch_size": 16,
-    "max_delay_ms": 2
+    "max_delay_ms": 20
   },
   "dynamic_engines": [
+    {
+      "confidence_threshold": 0.5,
+      "input_channels": 3,
+      "input_height": 640,
+      "input_layout": "chw",
+      "input_mean": [
+        0.48500001430511475,
+        0.4560000002384186,
+        0.4059999883174896
+      ],
+      "input_name": "images",
+      "input_std": [
+        0.2290000021457672,
+        0.2240000069141388,
+        0.22499999403953552
+      ],
+      "input_width": 640,
+      "labels": "models/imagenet_classes.txt",
+      "max_detections": 100,
+      "name": "yolov8l_trt",
+      "nms_threshold": 0.44999998807907104,
+      "output_layout": "chw",
+      "output_name": "output0",
+      "path": "models/yolov8l.engine",
+      "task": "detection",
+      "top_k": 5,
+      "type": "tensorrt",
+      "version": "1"
+    },
+    {
+      "confidence_threshold": 0.5,
+      "input_channels": 3,
+      "input_height": 640,
+      "input_layout": "chw",
+      "input_mean": [
+        0.48500001430511475,
+        0.4560000002384186,
+        0.4059999883174896
+      ],
+      "input_name": "images",
+      "input_std": [
+        0.2290000021457672,
+        0.2240000069141388,
+        0.22499999403953552
+      ],
+      "input_width": 640,
+      "labels": "models/imagenet_classes.txt",
+      "max_detections": 100,
+      "name": "yolov8l_onnx",
+      "nms_threshold": 0.44999998807907104,
+      "output_layout": "chw",
+      "output_name": "output0",
+      "path": "models/yolov8l.onnx",
+      "task": "detection",
+      "top_k": 5,
+      "type": "onnx",
+      "version": "1"
+    },
+    {
+      "confidence_threshold": 0.5,
+      "input_channels": 3,
+      "input_height": 256,
+      "input_layout": "chw",
+      "input_mean": [
+        0.48500001430511475,
+        0.4560000002384186,
+        0.4059999883174896
+      ],
+      "input_name": "input",
+      "input_std": [
+        0.2290000021457672,
+        0.2240000069141388,
+        0.22499999403953552
+      ],
+      "input_width": 256,
+      "labels": "",
+      "max_detections": 100,
+      "name": "vision_trt",
+      "nms_threshold": 0.44999998807907104,
+      "output_layout": "chw",
+      "output_name": "output",
+      "path": "models/vision_model.engine",
+      "task": "feature_extraction",
+      "top_k": 5,
+      "type": "tensorrt",
+      "version": "1"
+    },
+    {
+      "confidence_threshold": 0.5,
+      "input_channels": 3,
+      "input_height": 256,
+      "input_layout": "chw",
+      "input_mean": [
+        0.48500001430511475,
+        0.4560000002384186,
+        0.4059999883174896
+      ],
+      "input_name": "pixel_values",
+      "input_std": [
+        0.2290000021457672,
+        0.2240000069141388,
+        0.22499999403953552
+      ],
+      "input_width": 256,
+      "labels": "",
+      "max_detections": 100,
+      "name": "vision_onnx",
+      "nms_threshold": 0.44999998807907104,
+      "output_layout": "chw",
+      "output_name": "image_embeds",
+      "path": "models/vision_model.onnx",
+      "task": "feature_extraction",
+      "top_k": 5,
+      "type": "onnx",
+      "version": "1"
+    },
+    {
+      "confidence_threshold": 0.5,
+      "input_channels": 3,
+      "input_height": 224,
+      "input_layout": "chw",
+      "input_mean": [
+        0.48500001430511475,
+        0.4560000002384186,
+        0.4059999883174896
+      ],
+      "input_name": "data",
+      "input_std": [
+        0.2290000021457672,
+        0.2240000069141388,
+        0.22499999403953552
+      ],
+      "input_width": 224,
+      "labels": "models/imagenet_classes.txt",
+      "max_detections": 100,
+      "name": "squeezenet_trt",
+      "nms_threshold": 0.44999998807907104,
+      "output_layout": "chw",
+      "output_name": "squeezenet0_flatten0_reshape0",
+      "path": "models/squeezenet1.1-7.engine",
+      "task": "classification",
+      "top_k": 5,
+      "type": "tensorrt",
+      "version": "1"
+    },
+    {
+      "confidence_threshold": 0.5,
+      "input_channels": 3,
+      "input_height": 224,
+      "input_layout": "chw",
+      "input_mean": [
+        0.48500001430511475,
+        0.4560000002384186,
+        0.4059999883174896
+      ],
+      "input_name": "data",
+      "input_std": [
+        0.2290000021457672,
+        0.2240000069141388,
+        0.22499999403953552
+      ],
+      "input_width": 224,
+      "labels": "models/imagenet_classes.txt",
+      "max_detections": 100,
+      "name": "squeezenet_onnx",
+      "nms_threshold": 0.44999998807907104,
+      "output_layout": "chw",
+      "output_name": "squeezenet0_flatten0_reshape0",
+      "path": "models/squeezenet1.1-7.onnx",
+      "task": "classification",
+      "top_k": 5,
+      "type": "onnx",
+      "version": "1"
+    },
     {
       "confidence_threshold": 0.5,
       "input_channels": 3,
@@ -24,14 +198,43 @@
       "input_width": 224,
       "labels": "models/imagenet_classes.txt",
       "max_detections": 100,
-      "name": "squeezenet1.1-7_trt",
+      "name": "resnet50_trt",
       "nms_threshold": 0.44999998807907104,
       "output_layout": "chw",
       "output_name": "output",
-      "path": "models/squeezenet1.1-7.engine",
+      "path": "models/resnet50_classification.engine",
       "task": "classification",
       "top_k": 5,
       "type": "tensorrt",
+      "version": "1"
+    },
+    {
+      "confidence_threshold": 0.5,
+      "input_channels": 3,
+      "input_height": 224,
+      "input_layout": "chw",
+      "input_mean": [
+        0.48500001430511475,
+        0.4560000002384186,
+        0.4059999883174896
+      ],
+      "input_name": "data",
+      "input_std": [
+        0.2290000021457672,
+        0.2240000069141388,
+        0.22499999403953552
+      ],
+      "input_width": 224,
+      "labels": "models/imagenet_classes.txt",
+      "max_detections": 100,
+      "name": "resnet50_onnx",
+      "nms_threshold": 0.44999998807907104,
+      "output_layout": "chw",
+      "output_name": "resnetv17_dense0_fwd",
+      "path": "models/resnet50_classification.onnx",
+      "task": "classification",
+      "top_k": 5,
+      "type": "onnx",
       "version": "1"
     }
   ],
@@ -78,7 +281,7 @@
     "user": "root"
   },
   "recommendations": {
-    "generated_at": "2026-06-14T08:01:36",
+    "generated_at": "2026-06-14T12:44:25",
     "profiles": {
       "aggressive": {
         "best_for": "压测环境、离线批处理",
@@ -117,7 +320,7 @@
       "gpu": "NVIDIA GeForce RTX 5060 (8150MB total, 7020MB free, CC 12.0)",
       "gpu_count": 1,
       "has_gpu": true,
-      "per_sample_mb": 0.57421875,
+      "per_sample_mb": 4.6875,
       "ram_gb": 15
     }
   },

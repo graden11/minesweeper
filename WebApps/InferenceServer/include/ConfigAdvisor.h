@@ -46,5 +46,6 @@ private:
         const HardwareProfile &hw,
         const std::string &scenario,
         size_t freeVramMb,
-        bool fp16Avail);
+        bool fp16Avail,
+        float perSampleMb);
 };

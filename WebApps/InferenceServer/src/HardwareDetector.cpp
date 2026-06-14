@@ -68,6 +68,10 @@ bool HardwareDetector::detectGpu(HardwareProfile &out)
     }
     out.gpu_count = count;
 
+    // Save current CUDA device so we can restore it after detection
+    int savedDevice = 0;
+    cudaGetDevice(&savedDevice);
+
     for (int i = 0; i < count; ++i)
     {
         cudaDeviceProp prop{};
@@ -99,6 +103,8 @@ bool HardwareDetector::detectGpu(HardwareProfile &out)
                      i, info.name, info.total_memory_mb, info.free_memory_mb,
                      info.cc_major, info.cc_minor, info.sm_count, info.fp16_supported);
     }
+    // Restore original CUDA device so detection doesn't change global state
+    cudaSetDevice(savedDevice);
     return count > 0;
 #else
     (void)out;

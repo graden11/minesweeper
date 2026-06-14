@@ -175,7 +175,9 @@ void ConfigAdvisor::analyze(AppConfig &cfg,
             std::ifstream f(configPath);
             if (f.good()) { try { f >> j; } catch (...) { j = json::object(); } }
         }
-        bool wasFirstTime = !j.contains("recommendations");
+        bool wasFirstTime = !j.contains("recommendations")
+                           || !j["recommendations"].contains("profiles")
+                           || j["recommendations"]["profiles"].empty();
 
         // Auto-apply stable profile on first-time startup AND persist to config.json
         if (wasFirstTime)
@@ -207,6 +209,10 @@ void ConfigAdvisor::analyze(AppConfig &cfg,
             spdlog::info("ConfigAdvisor: stable profile written to config.json");
         }
     }
+
+    // Always persist recommendations so subsequent starts don't re-trigger
+    // first-time detection and so the frontend can read them.
+    writeRecommendationsToFile(configPath, cfg);
 }
 
 void ConfigAdvisor::compute(const HardwareProfile &hw,
@@ -237,8 +243,12 @@ void ConfigAdvisor::compute(const HardwareProfile &hw,
     size_t freeVram  = hw.gpus.empty() ? 0 : hw.gpus[0].free_memory_mb;
     bool   fp16Avail = hw.gpus.empty() ? false : hw.gpus[0].fp16_supported;
 
-    cfg.recommendations.profiles["stable"]     = buildProfile("stable", hw, scenario, freeVram, fp16Avail);
-    cfg.recommendations.profiles["aggressive"] = buildProfile("aggressive", hw, scenario, freeVram, fp16Avail);
+    // Use actual per-sample MB from model config (not hw.max_per_sample_mb which
+    // is never populated by HardwareDetector).
+    float perSampleMb = maxModelPerSampleMb(cfg);
+
+    cfg.recommendations.profiles["stable"]     = buildProfile("stable", hw, scenario, freeVram, fp16Avail, perSampleMb);
+    cfg.recommendations.profiles["aggressive"] = buildProfile("aggressive", hw, scenario, freeVram, fp16Avail, perSampleMb);
 }
 
 RecommendationProfile ConfigAdvisor::buildProfile(
@@ -246,7 +256,8 @@ RecommendationProfile ConfigAdvisor::buildProfile(
     const HardwareProfile &hw,
     const std::string &scenario,
     size_t freeVramMb,
-    bool fp16Avail)
+    bool fp16Avail,
+    float perSampleMb)
 {
     using namespace ConfigBounds;
 
@@ -269,7 +280,7 @@ RecommendationProfile ConfigAdvisor::buildProfile(
         prof.reason     = "保留充足系统资源冗余，优先保证稳定性";
     }
 
-    float perSampleMb = hw.max_per_sample_mb;
+    // Only fall back to 5.0 MB if the computed value is unavailable
     if (perSampleMb <= 0.0f) perSampleMb = 5.0f; // safe fallback
 
     // --- threads ---

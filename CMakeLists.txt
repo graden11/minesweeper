@@ -22,6 +22,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/third_party/onnxruntime/include
     ${PROJECT_SOURCE_DIR}/third_party/stb
     ${PROJECT_SOURCE_DIR}/third_party/muduo
+    ${PROJECT_SOURCE_DIR}/third_party/onnx
     /usr/include/spdlog
     ${CMAKE_BINARY_DIR}/generated
     ${OPENSSL_INCLUDE_DIR}
@@ -115,6 +116,8 @@ add_executable(simple_server
     ${HTTP_SERVER_SRC}
     ${INFERENCE_SERVER_SRC}
     ${GENERATED_DIR}/inference.pb.cc
+    ${PROJECT_SOURCE_DIR}/third_party/onnx/onnx.proto.min.pb.cc
+    ${PROJECT_SOURCE_DIR}/third_party/onnx/OnnxProtoPatcher.cpp
         WebApps/InferenceServer/include/FeatureExtractionPostprocessor.h
 )
 

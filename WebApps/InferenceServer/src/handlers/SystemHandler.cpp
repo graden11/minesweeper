@@ -89,7 +89,7 @@ void SystemHandler::handleGetHardware(const http::HttpRequest &req, http::HttpRe
             cur["max_delay_ms"]   = cfg.batching.max_delay_ms;
             cur["rate_limit_req_per_sec"] = cfg.server.rate_limit_req_per_sec;
             cur["rate_limit_burst"]      = cfg.server.rate_limit_burst;
-            cur["fp16"]            = true;
+            cur["fp16"]            = rec.system_profile.has_gpu && rec.system_profile.gpu_count > 0;
             j["current"] = cur;
         }
 
@@ -190,6 +190,15 @@ void SystemHandler::handleApplyConfig(const http::HttpRequest &req, http::HttpRe
             std::ofstream of(server_->configPath_);
             of << j.dump(2) << std::endl;
         }
+
+        // Also update in-memory config so GET /system/hardware returns the
+        // new values immediately (no stale "Current" column until restart).
+        server_->config_.server.threads              = p.server_threads;
+        server_->config_.batching.enabled            = (p.max_batch_size > 1);
+        server_->config_.batching.max_batch_size     = p.max_batch_size;
+        server_->config_.batching.max_delay_ms       = p.max_delay_ms;
+        server_->config_.server.rate_limit_req_per_sec = p.rate_limit_req_per_sec;
+        server_->config_.server.rate_limit_burst     = p.rate_limit_burst;
 
         spdlog::info("SystemHandler: applied '{}' profile to config.json", profileKey);
 

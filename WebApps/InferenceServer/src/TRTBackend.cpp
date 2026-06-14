@@ -1,4 +1,5 @@
 #include "../include/TRTBackend.h"
+#include "../../../third_party/onnx/OnnxProtoPatcher.h"
 
 #include <NvOnnxParser.h>
 #include <cuda_runtime.h>
@@ -173,15 +174,32 @@ bool TRTBackend::loadEngine(const std::string& enginePath)
         }
         else if (dims.nbDims > 0 && dims.d[0] > 0 && mode == nvinfer1::TensorIOMode::kINPUT)
         {
-            // Static batch engine (built from an ONNX model without dynamic
-            // batch dims).  Clamp maxBatchSize_ so upstream code (ModelPipeline,
-            // RequestBatcher) knows not to attempt dynamic batching via
-            // setInputShape — which would fail and cause SIGSEGV if not caught.
             int engineBatch = static_cast<int>(dims.d[0]);
-            if (maxBatchSize_ > engineBatch) {
-                maxBatchSize_ = engineBatch;
-                LOG_INFO << "Static batch engine (batch=" << engineBatch
-                         << "), clamping maxBatchSize_ to " << maxBatchSize_;
+            // TRT 10 with optimization profiles may report the MIN shape
+            // (batch=1) instead of -1 for dynamic engines.  Probe with
+            // setInputShape to get the real answer.
+            bool isDynamic = false;
+            if (maxBatchSize_ > engineBatch && context_)
+            {
+                nvinfer1::Dims probeDims = dims;
+                probeDims.d[0] = std::min(maxBatchSize_, engineBatch + 1);
+                if (context_->setInputShape(name, probeDims))
+                {
+                    // restore original shape so downstream init sees sane values
+                    context_->setInputShape(name, dims);
+                    isDynamic = true;
+                    dims.d[0] = std::max(8, maxBatchSize_);
+                    LOG_INFO << "Dynamic engine detected (TRT 10 compat), max batch "
+                             << dims.d[0] << " for tensor: " << name;
+                }
+            }
+            if (!isDynamic)
+            {
+                if (maxBatchSize_ > engineBatch) {
+                    maxBatchSize_ = engineBatch;
+                    LOG_INFO << "Static batch engine (batch=" << engineBatch
+                             << "), clamping maxBatchSize_ to " << maxBatchSize_;
+                }
             }
         }
 
@@ -271,6 +289,10 @@ bool TRTBackend::buildEngine(const std::string& onnxPath,
         LOG_ERROR << "Failed to create ONNX parser";
         return false;
     }
+
+    // Auto-patch ONNX batch dim before feeding to TRT parser
+    // (handles models exported without dynamic_axes)
+    inference::patchOnnxBatchDim(onnxPath);
 
     if (!parser->parseFromFile(onnxPath.c_str(),
                                 static_cast<int>(nvinfer1::ILogger::Severity::kWARNING)))

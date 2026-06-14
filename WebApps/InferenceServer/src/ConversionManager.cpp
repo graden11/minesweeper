@@ -1,5 +1,6 @@
 #include "../include/ConversionManager.h"
 #include "../include/ModelConfig.h"
+#include "../../../third_party/onnx/OnnxProtoPatcher.h"
 
 #include <NvInfer.h>
 #include <NvOnnxParser.h>
@@ -159,7 +160,10 @@ bool ConversionManager::buildEngine(const BuildOptions& opts, std::function<void
     auto parser = std::unique_ptr<nvonnxparser::IParser>(nvonnxparser::createParser(*network, logger));
     if (!parser) { progress(0, "Failed to create ONNX parser"); return false; }
 
-    progress(10, "Parsing ONNX model...");
+    progress(10, "Patching ONNX batch dim if needed...");
+    patchOnnxBatchDim(opts.onnxPath);  // auto-detect + fix static batch=1
+
+    progress(15, "Parsing ONNX model...");
     if (!parser->parseFromFile(opts.onnxPath.c_str(), static_cast<int>(nvinfer1::ILogger::Severity::kWARNING))) {
         progress(0, "Failed to parse ONNX: " + opts.onnxPath);
         return false;
